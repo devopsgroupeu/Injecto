@@ -1,0 +1,3 @@
+PyYAML>=5.1    # Use specific versions or ranges if needed
+Jinja2>=3.0
+colorama==0.4.6

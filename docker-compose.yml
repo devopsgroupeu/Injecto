@@ -1,0 +1,14 @@
+version: "3.9"
+
+services:
+  injecto:
+    image: ghcr.io/devopsgroupeu/injecto:latest
+    container_name: injecto
+    volumes:
+      - ~/my-local-templates:/templates
+      - ~/data:/data
+      - ./output:/output
+    command: >
+      --input-dir /templates
+      --output-dir /output
+      --data-files /data/00_base.yaml /data/10_override.yaml
