@@ -35,6 +35,9 @@ RUN chown -R appuser:appgroup /app
 # Switch to the non-root user
 USER appuser
 
+# Expose port for API mode
+EXPOSE 8000
+
 # Define the entrypoint for the container.
 # This makes the container behave like an executable for the script.
 # Arguments passed to `docker run` will be appended to this command.
