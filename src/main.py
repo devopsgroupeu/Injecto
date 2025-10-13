@@ -82,8 +82,7 @@ def main():
     parser.add_argument(
         "-i", "--input-dir",
         type=Path,
-        required=True,
-        help="Directory containing the files to process.",
+        help="Directory containing the files to process. Not required for API mode.",
     )
     parser.add_argument(
         "-o", "--output-dir",
@@ -93,14 +92,44 @@ def main():
     parser.add_argument(
         "-d", "--data-files",
         type=Path,
-        required=True,
         nargs='+',
         metavar='DATA_FILE',
-        help="One or more paths to YAML data files. Values from later files override earlier ones."
+        help="One or more paths to YAML data files. Values from later files override earlier ones. Not required for API mode."
     )
     parser.add_argument("--debug", action="store_true", help="Enable debug logging.")
+    parser.add_argument(
+        "--api",
+        action="store_true",
+        help="Run as API server instead of CLI processing."
+    )
+    parser.add_argument(
+        "--host",
+        type=str,
+        default="0.0.0.0",
+        help="API server host (only used with --api)."
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=8000,
+        help="API server port (only used with --api)."
+    )
 
     args = parser.parse_args()
+
+    # Handle API mode
+    if args.api:
+        from api import run_api_server
+        log_level = logging.DEBUG if args.debug else LOG_LEVEL
+        setLoggingLevel(log_level)
+        run_api_server(host=args.host, port=args.port, debug=args.debug)
+        return
+
+    # Validate required arguments for CLI mode
+    if not args.input_dir:
+        parser.error("--input-dir is required for CLI mode")
+    if not args.data_files:
+        parser.error("--data-files is required for CLI mode")
 
     # If output directory is not specified, use the input directory for in-place editing
     if not args.output_dir:

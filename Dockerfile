@@ -13,6 +13,12 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 # Set the working directory inside the container
 WORKDIR /app
 
+# Install git for repository cloning
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Create a non-root user and group for security
 # Running containers as non-root is a best practice.
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
@@ -34,6 +40,9 @@ COPY src/ ./src/
 RUN chown -R appuser:appgroup /app
 # Switch to the non-root user
 USER appuser
+
+# Expose port for API mode
+EXPOSE 8000
 
 # Define the entrypoint for the container.
 # This makes the container behave like an executable for the script.

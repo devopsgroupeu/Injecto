@@ -12,3 +12,13 @@ services:
       --input-dir /templates
       --output-dir /output
       --data-files /data/00_base.yaml /data/10_override.yaml
+
+  injecto-api:
+    image: ghcr.io/devopsgroupeu/injecto:latest
+    container_name: injecto-api
+    ports:
+      - 8000:8000
+    command: >
+      --api
+      --host 0.0.0.0
+      --port 8000
