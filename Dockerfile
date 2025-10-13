@@ -13,6 +13,12 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 # Set the working directory inside the container
 WORKDIR /app
 
+# Install git for repository cloning
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Create a non-root user and group for security
 # Running containers as non-root is a best practice.
 RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
