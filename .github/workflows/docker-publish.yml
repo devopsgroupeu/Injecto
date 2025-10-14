@@ -1,13 +1,19 @@
 name: Build and Push Docker image to GHCR
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Docker image tag (leave empty for "latest")'
+        required: false
+        type: string
   push:
     branches:
       - main
     paths:
-      - '**/Dockerfile'
-      - '.github/workflows/docker-publish.yml'
-      - '**/*.py'
+      - "**/Dockerfile"
+      - ".github/workflows/docker-publish.yml"
+      - "**/*.py"
   release:
     types: [published]
 
@@ -38,7 +44,11 @@ jobs:
         id: vars
         run: |
           IMAGE_NAME=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')
-          if [[ "${{ github.event_name }}" == "release" ]]; then
+
+          # Priority: manual input > release tag > latest
+          if [[ -n "${{ inputs.tag }}" ]]; then
+            IMAGE_TAG=${{ inputs.tag }}
+          elif [[ "${{ github.event_name }}" == "release" ]]; then
             IMAGE_TAG=${{ github.event.release.tag_name }}
           else
             IMAGE_TAG=latest
