@@ -48,6 +48,7 @@ def format_value_for_file(value):
     Formats a Python value into a string suitable for writing to a config file.
     - Strings are wrapped in double quotes.
     - Booleans are converted to lowercase 'true'/'false'.
+    - Lists and dicts are converted to JSON format with double quotes.
     - Numbers and other types are converted to their string representation.
     """
     if isinstance(value, str):
@@ -58,6 +59,8 @@ def format_value_for_file(value):
         return f'"{value}"'
     if isinstance(value, bool):
         return str(value).lower()
+    if isinstance(value, (list, dict)):
+        return json.dumps(value)
     return str(value)
 
 # --- Core Functions ---
