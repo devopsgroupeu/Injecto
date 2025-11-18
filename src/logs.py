@@ -13,7 +13,8 @@ LOG_LEVEL = logging.INFO  # Change to logging.DEBUG for more verbose output
 
 # --- Logging Setup ---
 logging.basicConfig(level=LOG_LEVEL, format=LOG_FORMAT, stream=sys.stdout)
-file_handler = logging.FileHandler("injecto.log")
+# File handler writes to /tmp for Kubernetes read-only filesystems
+file_handler = logging.FileHandler("/tmp/injecto.log")
 file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
 logging.getLogger().addHandler(file_handler)
 

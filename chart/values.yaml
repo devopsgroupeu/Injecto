@@ -1,0 +1,199 @@
+# Default values for injecto
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+# Number of replicas for the Injecto deployment
+replicaCount: 1
+
+image:
+  # Container image repository
+  repository: ghcr.io/devopsgroupeu/injecto
+  # Image pull policy
+  pullPolicy: IfNotPresent
+  # Overrides the image tag whose default is the chart appVersion
+  tag: ""
+
+# Image pull secrets for private registries
+imagePullSecrets: []
+  # - name: ghcr-secret
+
+# Override the default chart name
+nameOverride: ""
+# Override the full release name
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Automatically mount a ServiceAccount's API credentials
+  automount: true
+  # Annotations to add to the service account
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Annotations to add to the pod
+podAnnotations: {}
+# Labels to add to the pod
+podLabels: {}
+
+podSecurityContext:
+  # Run as non-root user (matches Dockerfile)
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  # Drop all capabilities
+  capabilities:
+    drop:
+    - ALL
+  # Read-only root filesystem
+  readOnlyRootFilesystem: true
+  # Run as non-root
+  runAsNonRoot: true
+  runAsUser: 1000
+  # Prevent privilege escalation
+  allowPrivilegeEscalation: false
+
+service:
+  # Service type (ClusterIP, NodePort, LoadBalancer)
+  type: ClusterIP
+  # Service port
+  port: 8000
+  # Target container port
+  targetPort: 8000
+  # Annotations for the service
+  annotations: {}
+
+ingress:
+  # Enable ingress
+  enabled: false
+  # Ingress class name
+  className: ""
+  # Ingress annotations
+  annotations: {}
+    # kubernetes.io/ingress.class: nginx
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  # Ingress hosts configuration
+  hosts:
+    - host: injecto.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # TLS configuration
+  tls: []
+  #  - secretName: injecto-tls
+  #    hosts:
+  #      - injecto.example.com
+
+resources:
+  # Resource limits
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  # Resource requests
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+livenessProbe:
+  # Enable liveness probe
+  enabled: true
+  # HTTP GET request configuration
+  httpGet:
+    path: /health
+    port: http
+  # Initial delay before probe starts
+  initialDelaySeconds: 30
+  # Probe interval
+  periodSeconds: 10
+  # Probe timeout
+  timeoutSeconds: 5
+  # Success threshold
+  successThreshold: 1
+  # Failure threshold
+  failureThreshold: 3
+
+readinessProbe:
+  # Enable readiness probe
+  enabled: true
+  # HTTP GET request configuration
+  httpGet:
+    path: /health
+    port: http
+  # Initial delay before probe starts
+  initialDelaySeconds: 15
+  # Probe interval
+  periodSeconds: 10
+  # Probe timeout
+  timeoutSeconds: 5
+  # Success threshold
+  successThreshold: 1
+  # Failure threshold
+  failureThreshold: 3
+
+autoscaling:
+  # Enable horizontal pod autoscaler
+  enabled: false
+  # Minimum number of replicas
+  minReplicas: 1
+  # Maximum number of replicas
+  maxReplicas: 10
+  # Target CPU utilization percentage
+  targetCPUUtilizationPercentage: 80
+  # Target memory utilization percentage (optional)
+  # targetMemoryUtilizationPercentage: 80
+
+# Additional volumes
+volumes: []
+  # - name: temp-dir
+  #   emptyDir: {}
+
+# Additional volume mounts
+volumeMounts: []
+  # - name: temp-dir
+  #   mountPath: /tmp
+
+# Node selector for pod assignment
+nodeSelector: {}
+
+# Tolerations for pod assignment
+tolerations: []
+
+# Affinity rules for pod assignment
+affinity: {}
+
+# Environment variables
+env: []
+  # - name: LOG_LEVEL
+  #   value: "info"
+  # - name: DEBUG
+  #   value: "false"
+
+# Environment variables from ConfigMaps or Secrets
+envFrom: []
+  # - configMapRef:
+  #     name: injecto-config
+  # - secretRef:
+  #     name: injecto-secrets
+
+# Injecto-specific configuration
+injecto:
+  # API server configuration
+  api:
+    # Enable API mode (always true for Kubernetes deployment)
+    enabled: true
+    # Host to bind to
+    host: "0.0.0.0"
+    # Port to bind to (should match service.targetPort)
+    port: 8000
+    # Enable debug mode
+    debug: false
+
+  # Additional command-line arguments
+  # These are appended to the base command
+  extraArgs: []
+    # - "--debug"

@@ -1,0 +1,74 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named {{ .Release.Name }}.
+
+Injecto has been deployed successfully!
+
+1. Get the application URL by running these commands:
+{{- if .Values.ingress.enabled }}
+{{- range $host := .Values.ingress.hosts }}
+  {{- range .paths }}
+  http{{ if $.Values.ingress.tls }}s{{ end }}://{{ $host.host }}{{ .path }}
+  {{- end }}
+{{- end }}
+{{- else if contains "NodePort" .Values.service.type }}
+  export NODE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].nodePort}" services {{ include "injecto.fullname" . }})
+  export NODE_IP=$(kubectl get nodes --namespace {{ .Release.Namespace }} -o jsonpath="{.items[0].status.addresses[0].address}")
+  echo http://$NODE_IP:$NODE_PORT
+{{- else if contains "LoadBalancer" .Values.service.type }}
+     NOTE: It may take a few minutes for the LoadBalancer IP to be available.
+           You can watch the status of by running 'kubectl get --namespace {{ .Release.Namespace }} svc -w {{ include "injecto.fullname" . }}'
+  export SERVICE_IP=$(kubectl get svc --namespace {{ .Release.Namespace }} {{ include "injecto.fullname" . }} --template "{{"{{ range (index .status.loadBalancer.ingress 0) }}{{.}}{{ end }}"}}")
+  echo http://$SERVICE_IP:{{ .Values.service.port }}
+{{- else if contains "ClusterIP" .Values.service.type }}
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "injecto.name" . }},app.kubernetes.io/instance={{ .Release.Name }}" -o jsonpath="{.items[0].metadata.name}")
+  export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
+  echo "Visit http://127.0.0.1:8080 to use your application"
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 8080:$CONTAINER_PORT
+{{- end }}
+
+2. Check the health of Injecto:
+  curl http://localhost:8080/health
+
+3. API Documentation:
+  The Injecto API provides the following endpoints:
+  - GET  /health                - Health check endpoint
+  - POST /process               - Process configuration files from Git repository (returns JSON)
+  - POST /process-upload        - Process uploaded files (returns ZIP)
+  - POST /process-git-download  - Process Git repository and download results (returns ZIP)
+
+  For detailed API usage, visit: https://github.com/devopsgroupeu/Injecto
+
+4. Example usage with curl:
+  # Health check
+  curl http://localhost:8080/health
+
+  # Process Git repository
+  curl -X POST http://localhost:8080/process \
+    -H "Content-Type: application/json" \
+    -d '{
+      "source": "git",
+      "repo_url": "https://github.com/example/configs.git",
+      "input_dir": "templates/",
+      "data": {"key": "value"}
+    }'
+
+{{- if .Values.autoscaling.enabled }}
+
+5. Autoscaling is enabled:
+  - Minimum replicas: {{ .Values.autoscaling.minReplicas }}
+  - Maximum replicas: {{ .Values.autoscaling.maxReplicas }}
+  {{- if .Values.autoscaling.targetCPUUtilizationPercentage }}
+  - Target CPU utilization: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}%
+  {{- end }}
+  {{- if .Values.autoscaling.targetMemoryUtilizationPercentage }}
+  - Target memory utilization: {{ .Values.autoscaling.targetMemoryUtilizationPercentage }}%
+  {{- end }}
+{{- end }}
+
+For more information about Injecto, visit:
+  - GitHub: https://github.com/devopsgroupeu/Injecto
+  - LinkedIn: https://www.linkedin.com/company/devopsgroup8/
+
+To get support or report issues:
+  - GitHub Issues: https://github.com/devopsgroupeu/Injecto/issues
