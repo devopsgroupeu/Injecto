@@ -1,0 +1,20 @@
+apiVersion: v2
+name: injecto
+description: A Helm chart for Injecto - a Python tool that processes configuration files with YAML data injection
+type: application
+version: 0.2.0
+appVersion: "0.2.1"
+home: https://github.com/devopsgroupeu/Injecto
+sources:
+  - https://github.com/devopsgroupeu/Injecto
+keywords:
+  - configuration
+  - templating
+  - yaml
+  - infrastructure-as-code
+  - devops
+maintainers:
+  - name: DevOpsGroup
+    email: support@devopsgroup.sk
+    url: https://www.linkedin.com/company/devopsgroup8/
+icon: https://avatars.githubusercontent.com/u/devopsgroupeu
