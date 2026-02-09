@@ -157,7 +157,8 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
                 if section_begin_match:
                     yaml_path = section_begin_match.group(1)
                     value = get_value_by_path(data, yaml_path)
-                    active_sections.append({'key': yaml_path, 'should_be_commented': value is False})
+                    # Comment out lines if value is False/None (disabled/missing), uncomment if True (enabled)
+                    active_sections.append({'key': yaml_path, 'should_be_commented': not bool(value) if value is not None else True})
                 elif section_end_match:
                     if active_sections and active_sections[-1]['key'] == section_end_match.group(1):
                         active_sections.pop()
