@@ -5,7 +5,7 @@ FROM python:3.13-slim
 # This helps with image identification and compliance
 LABEL org.opencontainers.image.title="injecto"
 LABEL org.opencontainers.image.description="A Python tool that automatically replaces placeholders in code or configuration files with values from a YAML file"
-LABEL org.opencontainers.image.version="0.1.0"
+LABEL org.opencontainers.image.version="0.3.0"
 LABEL org.opencontainers.image.source="https://github.com/devopsgroupeu/Injecto"
 LABEL org.opencontainers.image.authors="Andrej Rabek <andrej.rabek@devopsgroup.sk>"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
@@ -13,9 +13,14 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 # Set the working directory inside the container
 WORKDIR /app
 
-# Install git for repository cloning
+# Install git for repository cloning and terraform for formatting
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
+    apt-get install -y --no-install-recommends git wget unzip && \
+    wget -qO /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.11.4/terraform_1.11.4_linux_$(dpkg --print-architecture).zip" && \
+    unzip -o /tmp/terraform.zip -d /usr/local/bin && \
+    rm /tmp/terraform.zip && \
+    apt-get purge -y wget unzip && \
+    apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 

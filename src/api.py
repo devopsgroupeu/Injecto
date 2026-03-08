@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+import subprocess
 import tempfile
 import shutil
 import zipfile
@@ -16,12 +17,13 @@ import yaml
 from logs import logger, green, yellow, red
 from processing import load_and_merge_data, process_files
 from git import clone_repository
+from version import __version__
 
 # --- FastAPI App Setup ---
 app = FastAPI(
     title="Injecto API",
     description="A REST API for processing configuration files with YAML data injection using @param and @section directives",
-    version="0.1.0"
+    version=__version__
 )
 
 # --- Pydantic Models ---
@@ -64,6 +66,31 @@ def cleanup_temp_directory(temp_dir: Path):
         except Exception as e:
             logger.warning(yellow(f"Failed to cleanup temporary directory {temp_dir}: {e}"))
 
+def run_terraform_fmt(output_dir: Path):
+    """Run terraform fmt on all Terraform directories in the output."""
+    tf_dirs = set()
+    for tf_file in output_dir.rglob("*.tf"):
+        tf_dirs.add(tf_file.parent)
+
+    for tf_dir in sorted(tf_dirs):
+        try:
+            result = subprocess.run(
+                ["terraform", "fmt", "-recursive"],
+                cwd=str(tf_dir),
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if result.returncode == 0:
+                logger.info(green(f"terraform fmt successful: {tf_dir.relative_to(output_dir)}"))
+            else:
+                logger.warning(yellow(f"terraform fmt failed in {tf_dir}: {result.stderr}"))
+        except FileNotFoundError:
+            logger.warning(yellow("terraform binary not found, skipping formatting"))
+            break
+        except subprocess.TimeoutExpired:
+            logger.warning(yellow(f"terraform fmt timed out in {tf_dir}"))
+
 def create_zip_response(output_dir: Path) -> StreamingResponse:
     """Create a zip file response from the output directory."""
     zip_buffer = io.BytesIO()
@@ -87,7 +114,7 @@ def create_zip_response(output_dir: Path) -> StreamingResponse:
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
-    return HealthResponse(status="healthy", version="0.1.0")
+    return HealthResponse(status="healthy", version=__version__)
 
 @app.post("/process", response_model=ProcessResponse)
 async def process_templates_endpoint(request: ProcessRequest):
@@ -230,6 +257,9 @@ async def process_with_upload(
         # Process files with @param and @section directives
         process_files(input_dir, output_dir, merged_data)
 
+        # Format Terraform files
+        run_terraform_fmt(output_dir)
+
         # Return zip file with results
         return create_zip_response(output_dir)
 
@@ -287,6 +317,9 @@ async def process_git_download(request: ProcessRequest):
 
         # Process files with @param and @section directives
         process_files(actual_input_dir, output_dir, merged_data)
+
+        # Format Terraform files
+        run_terraform_fmt(output_dir)
 
         # Return zip file with results
         return create_zip_response(output_dir)
