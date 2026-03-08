@@ -13,9 +13,14 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 # Set the working directory inside the container
 WORKDIR /app
 
-# Install git for repository cloning
+# Install git for repository cloning and terraform for formatting
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends git && \
+    apt-get install -y --no-install-recommends git wget unzip && \
+    wget -qO /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.11.4/terraform_1.11.4_linux_$(dpkg --print-architecture).zip" && \
+    unzip -o /tmp/terraform.zip -d /usr/local/bin && \
+    rm /tmp/terraform.zip && \
+    apt-get purge -y wget unzip && \
+    apt-get autoremove -y && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
