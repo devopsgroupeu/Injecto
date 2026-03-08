@@ -5,7 +5,7 @@ FROM python:3.13-slim
 # This helps with image identification and compliance
 LABEL org.opencontainers.image.title="injecto"
 LABEL org.opencontainers.image.description="A Python tool that automatically replaces placeholders in code or configuration files with values from a YAML file"
-LABEL org.opencontainers.image.version="0.1.0"
+LABEL org.opencontainers.image.version="0.3.0"
 LABEL org.opencontainers.image.source="https://github.com/devopsgroupeu/Injecto"
 LABEL org.opencontainers.image.authors="Andrej Rabek <andrej.rabek@devopsgroup.sk>"
 LABEL org.opencontainers.image.licenses="Apache-2.0"

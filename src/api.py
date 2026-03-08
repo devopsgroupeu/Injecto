@@ -17,12 +17,13 @@ import yaml
 from logs import logger, green, yellow, red
 from processing import load_and_merge_data, process_files
 from git import clone_repository
+from version import __version__
 
 # --- FastAPI App Setup ---
 app = FastAPI(
     title="Injecto API",
     description="A REST API for processing configuration files with YAML data injection using @param and @section directives",
-    version="0.1.0"
+    version=__version__
 )
 
 # --- Pydantic Models ---
@@ -113,7 +114,7 @@ def create_zip_response(output_dir: Path) -> StreamingResponse:
 @app.get("/health", response_model=HealthResponse)
 async def health_check():
     """Health check endpoint."""
-    return HealthResponse(status="healthy", version="0.1.0")
+    return HealthResponse(status="healthy", version=__version__)
 
 @app.post("/process", response_model=ProcessResponse)
 async def process_templates_endpoint(request: ProcessRequest):

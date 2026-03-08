@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0] - 2026-03-08
+### Added
+- Terraform fmt post-processing: automatically formats all `.tf` files after template processing
+- Terraform 1.11.4 binary included in Docker image
+
+### Changed
+- Version is now defined in a single place (`src/version.py`) — API, health endpoint, and package metadata all read from it
+
 ## [0.2.1] - 2025-11-18
 ### Added
 - Helm chart for Kubernetes deployment with comprehensive configuration options
