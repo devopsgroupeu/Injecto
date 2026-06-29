@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import yaml
 
@@ -34,7 +34,6 @@ class ProcessRequest(BaseModel):
     repo_url: Optional[str] = Field(default=None, description="Git repository URL (required if source is 'git')")
     branch: Optional[str] = Field(default=None, description="Git branch to clone")
     input_dir: str = Field(description="Input directory path within the source")
-    # Removed process_mode - only parameter/section processing is supported
     data: Dict[str, Any] = Field(description="YAML data as dictionary")
 
 class ProcessResponse(BaseModel):

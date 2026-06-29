@@ -71,30 +71,3 @@ def clone_repository(repo_url, clone_path, branch=None, username=None, pat=None)
             )
         )
         return False
-
-
-# --- Example Usage ---
-
-# Example 1: Cloning a public repository
-# print("--- Cloning a public repository ---")
-# public_repo_url = "https://github.com/devopsgroupeu/openprime-infra-templates.git"
-# public_clone_path = "cloned_repos/git_public"
-# clone_repository(public_repo_url, public_clone_path)
-# print("-" * 30)
-
-# Example 2: Cloning a public repository with a specific branch
-# print("\n--- Cloning a public repository with a specific branch ---")
-# branch_to_clone = "OPE-89-prepare-repository"
-# branch_clone_path = "cloned_repos/git_branch"
-# clone_repository(public_repo_url, branch_clone_path, branch=branch_to_clone)
-# print("-" * 30)
-
-# Example 3: Cloning a private repository (replace with your own details)
-# Note: You should be careful with storing credentials in plain text.
-# Consider using environment variables or a more secure method in a real application.
-# private_repo_url = "https://github.com/your-username/your-private-repo.git"
-# your_username = "your-username"
-# your_pat = "your-personal-access-token"
-# private_clone_path = "cloned_repos/private_repo"
-# print("\n--- Cloning a private repository ---")
-# clone_repository(private_repo_url, private_clone_path, username=your_username, pat=your_pat)
