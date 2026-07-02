@@ -2,8 +2,8 @@ apiVersion: v2
 name: injecto
 description: A Helm chart for Injecto - a Python tool that processes configuration files with YAML data injection
 type: application
-version: 0.3.0
-appVersion: "0.3.0"
+version: 0.3.1
+appVersion: "0.3.1"
 home: https://github.com/devopsgroupeu/Injecto
 sources:
   - https://github.com/devopsgroupeu/Injecto
