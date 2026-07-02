@@ -9,7 +9,7 @@ import io
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import yaml
@@ -18,6 +18,7 @@ from logs import logger, green, yellow, red
 from processing import load_and_merge_data, process_files
 from git import clone_repository
 from version import __version__
+from auth import require_service_token
 
 # --- FastAPI App Setup ---
 app = FastAPI(
@@ -115,7 +116,7 @@ async def health_check():
     """Health check endpoint."""
     return HealthResponse(status="healthy", version=__version__)
 
-@app.post("/process", response_model=ProcessResponse)
+@app.post("/process", response_model=ProcessResponse, dependencies=[Depends(require_service_token)])
 async def process_templates_endpoint(request: ProcessRequest):
     """
     Process configuration files with YAML data using @param and @section directives.
@@ -187,7 +188,7 @@ async def process_templates_endpoint(request: ProcessRequest):
         if temp_dir:
             cleanup_temp_directory(temp_dir)
 
-@app.post("/process-upload")
+@app.post("/process-upload", dependencies=[Depends(require_service_token)])
 async def process_with_upload(
     files: List[UploadFile] = File(...),
     config_files: List[UploadFile] = File(default=[]),
@@ -272,7 +273,7 @@ async def process_with_upload(
         if temp_dir:
             cleanup_temp_directory(temp_dir)
 
-@app.post("/process-git-download")
+@app.post("/process-git-download", dependencies=[Depends(require_service_token)])
 async def process_git_download(request: ProcessRequest):
     """
     Process configuration files from Git repository and return a zip file with results.
