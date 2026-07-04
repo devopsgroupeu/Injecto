@@ -205,3 +205,18 @@ injecto:
   # These are appended to the base command
   extraArgs: []
     # - "--debug"
+
+# Network policy — restrict who can reach Injecto (defense-in-depth alongside the
+# X-Service-Token auth). Enable in prod GitOps. Ingress-only, so Injecto keeps
+# egress for git clone / DNS.
+networkPolicy:
+  enabled: false
+  ingress:
+    # Only the OpenPrime backend may call Injecto, on the service port.
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: openprime-app-backend
+      ports:
+        - protocol: TCP
+          port: 8000
