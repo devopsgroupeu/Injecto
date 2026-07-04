@@ -1,0 +1,20 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "injecto.fullname" . }}
+  labels:
+    {{- include "injecto.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "injecto.selectorLabels" . | nindent 6 }}
+  # Ingress-only: restrict who can reach Injecto without constraining its egress
+  # (it needs to clone the templates repo and resolve DNS).
+  policyTypes:
+    - Ingress
+  {{- with .Values.networkPolicy.ingress }}
+  ingress:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
