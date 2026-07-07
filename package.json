@@ -1,6 +1,6 @@
 {
   "name": "injecto",
-  "version": "0.3.3",
+  "version": "0.4.0",
   "private": true,
   "description": "Injecto template processor: Docker image and Helm chart",
   "devDependencies": {

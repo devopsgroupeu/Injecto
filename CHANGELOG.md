@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0](https://github.com/devopsgroupeu/Injecto/compare/v0.3.3...v0.4.0) (2026-07-07)
+
+### 🚀 Features
+
+* **logging:** unified JSON logs with cross-service request-id correlation ([#12](https://github.com/devopsgroupeu/Injecto/issues/12)) ([2e0c0ea](https://github.com/devopsgroupeu/Injecto/commit/2e0c0ea154de4e512f8922eddc5742913cf214c8))
+
 ## [0.3.3](https://github.com/devopsgroupeu/Injecto/compare/v0.3.2...v0.3.3) (2026-07-07)
 
 ### 🏗️ Build System
