@@ -1,49 +1,85 @@
 #!/usr/bin/env python3
+"""Structured JSON logging for Injecto.
 
+Emits one JSON object per log line on stdout, using a schema shared across the
+OpenPrime services ({timestamp, level, service, message, requestId}) so Loki can
+parse and correlate logs from every service the same way.
+"""
+
+import contextvars
+import json
 import logging
+import re
 import sys
-from colorama import init, Fore, Back
 
-# --- Initialize colorama ---
-init(autoreset=True)
+SERVICE = "injecto"
 
-# --- Configuration ---
-LOG_FORMAT = "%(asctime)s - %(levelname)-8s - %(message)s"
-LOG_LEVEL = logging.INFO  # Change to logging.DEBUG for more verbose output
+# Correlation id propagated from the caller via the X-Request-ID header (set by the
+# API middleware). Included in every log line emitted while handling that request.
+request_id_var = contextvars.ContextVar("request_id", default=None)
 
-# --- Logging Setup ---
-logging.basicConfig(level=LOG_LEVEL, format=LOG_FORMAT, stream=sys.stdout)
-# File handler writes to /tmp for Kubernetes read-only filesystems
-file_handler = logging.FileHandler("/tmp/injecto.log")
-file_handler.setFormatter(logging.Formatter(LOG_FORMAT))
-logging.getLogger().addHandler(file_handler)
+# Defence-in-depth: mask user:pass@ credentials in any logged string.
+_URL_CREDENTIALS_RE = re.compile(r"://[^/\s:@]+:[^/\s@]+@")
 
-logger = logging.getLogger(__name__)  # Use __name__ for logger identification
+
+def _mask(text: str) -> str:
+    return _URL_CREDENTIALS_RE.sub("://***:***@", text)
+
+
+# Normalise Python level names to the backend's vocabulary (info/warn/error/debug).
+_LEVEL_MAP = {"WARNING": "warn", "CRITICAL": "error"}
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        entry = {
+            "timestamp": self.formatTime(record, "%Y-%m-%d %H:%M:%S"),
+            "level": _LEVEL_MAP.get(record.levelname, record.levelname.lower()),
+            "service": SERVICE,
+            "message": _mask(record.getMessage()),
+        }
+        request_id = request_id_var.get()
+        if request_id:
+            entry["requestId"] = request_id
+        if record.exc_info:
+            entry["stack"] = self.formatException(record.exc_info)
+        return json.dumps(entry)
+
+
+# Configure the root logger with a single JSON handler on stdout (collected by Loki
+# in Kubernetes). No file handler — matches the backend's console-only approach.
+_handler = logging.StreamHandler(sys.stdout)
+_handler.setFormatter(JsonFormatter())
+_root = logging.getLogger()
+_root.handlers.clear()
+_root.addHandler(_handler)
+_root.setLevel(logging.INFO)
+
+logger = logging.getLogger(SERVICE)
 
 
 def setLoggingLevel(level: int):
-    """Set the logging level."""
-    logger.setLevel(level)
-    for handler in logger.handlers:
+    """Set the logging level on the root logger and its handlers."""
+    root = logging.getLogger()
+    root.setLevel(level)
+    for handler in root.handlers:
         handler.setLevel(level)
-    level_name = logging.getLevelName(level)
-    logger.info(f"Logging level set to {level_name}")
+    logger.info(f"Logging level set to {logging.getLevelName(level)}")
 
 
-def green(message: str):
-    """Prints a message in green color."""
-    return Fore.GREEN + message
+# Colour helpers are now no-ops: structured JSON must stay plain so Loki can parse
+# it. Kept as pass-throughs so existing call sites (logger.info(green("..."))) work.
+def green(message: str) -> str:
+    return message
 
 
-def yellow(message: str):
-    """Prints a message in yellow color."""
-    return Fore.YELLOW + message
+def yellow(message: str) -> str:
+    return message
 
 
-def red(message: str):
-    """Prints a message in red color."""
-    return Fore.RED + message
+def red(message: str) -> str:
+    return message
 
-def greenBack(message: str):
-    """Prints a message in magenta color."""
-    return Back.GREEN + message + Back.RESET
+
+def greenBack(message: str) -> str:
+    return message

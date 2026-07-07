@@ -9,12 +9,14 @@ import io
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends
+import uuid
+
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import yaml
 
-from logs import logger, green, yellow, red
+from logs import logger, green, yellow, red, request_id_var
 from processing import load_and_merge_data, process_files
 from git import clone_repository
 from version import __version__
@@ -26,6 +28,20 @@ app = FastAPI(
     description="A REST API for processing configuration files with YAML data injection using @param and @section directives",
     version=__version__
 )
+
+
+@app.middleware("http")
+async def request_id_middleware(request: Request, call_next):
+    """Bind the caller's X-Request-ID (or a new one) so it appears in every log
+    line for this request and correlates with the backend and other services."""
+    request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16]
+    token = request_id_var.set(request_id)
+    try:
+        response = await call_next(request)
+    finally:
+        request_id_var.reset(token)
+    response.headers["X-Request-ID"] = request_id
+    return response
 
 # --- Pydantic Models ---
 
@@ -347,6 +363,7 @@ def run_api_server(host: str = "0.0.0.0", port: int = 8000, debug: bool = False)
         host=host,
         port=port,
         log_level=log_level,
+        log_config=None,  # use our root JSON logging instead of uvicorn's defaults
         reload=debug
     )
 
