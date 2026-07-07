@@ -1,5 +1,15 @@
 # Changelog
 
+All notable changes to this project will be documented in this file.
+
+## [0.3.3](https://github.com/devopsgroupeu/Injecto/compare/v0.3.2...v0.3.3) (2026-07-07)
+
+### 🏗️ Build System
+
+* adopt semantic-release pipeline and enable CI (unified versioning) ([#11](https://github.com/devopsgroupeu/Injecto/issues/11)) ([931dd30](https://github.com/devopsgroupeu/Injecto/commit/931dd30361a38c6df7d8e86c605b69a1ecb133bd))
+
+# Changelog
+
 ## [0.3.0] - 2026-03-08
 ### Added
 - Terraform fmt post-processing: automatically formats all `.tf` files after template processing
