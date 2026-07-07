@@ -2,8 +2,18 @@
 
 import subprocess
 import os
+import re
 
 from logs import logger, green, yellow, red
+
+# Matches the "user:pass@" segment of a URL so credentials (e.g. a git PAT in an
+# authenticated clone URL) can be stripped before anything is written to logs.
+_URL_CREDENTIALS_RE = re.compile(r"://[^/\s:@]+:[^/\s@]+@")
+
+
+def mask_url_credentials(text):
+    """Replace any user:pass@ credentials in a string with ://***:***@."""
+    return _URL_CREDENTIALS_RE.sub("://***:***@", text)
 
 
 def clone_repository(repo_url, clone_path, branch=None, username=None, pat=None):
@@ -54,7 +64,9 @@ def clone_repository(repo_url, clone_path, branch=None, username=None, pat=None)
 
     command.extend([authenticated_url, clone_path])
 
-    logger.info(f"Executing command: {' '.join(command)}")
+    # Mask any user:pass@ credentials before logging the command, so an
+    # authenticated clone URL never writes a git PAT to the logs.
+    logger.info(f"Executing command: {mask_url_credentials(' '.join(command))}")
 
     try:
         # Run the command
