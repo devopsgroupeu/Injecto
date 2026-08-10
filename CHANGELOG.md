@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.3](https://github.com/devopsgroupeu/Injecto/compare/v0.4.2...v0.4.3) (2026-08-10)
+
+### 🐛 Bug Fixes
+
+* refuse to substitute [@param](https://github.com/param) values that open a multi-line block (OP-221) ([#17](https://github.com/devopsgroupeu/Injecto/issues/17)) ([9d86126](https://github.com/devopsgroupeu/Injecto/commit/9d86126df3b789f0a6b67b240c09bd395777400b))
+
 ## [0.4.2](https://github.com/devopsgroupeu/Injecto/compare/v0.4.1...v0.4.2) (2026-08-10)
 
 ### ♻️ Code Refactoring
