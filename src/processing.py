@@ -78,7 +78,12 @@ def format_value_for_file(value):
         if (value.startswith('"') and value.endswith('"')) or \
            (value.startswith("'") and value.endswith("'")):
             return value
-        return f'"{value}"'
+        # json.dumps rather than f'"{value}"': both HCL and YAML accept
+        # JSON-style escapes, so this is byte-identical for every value that
+        # already worked, and only differs where the naive form was broken — an
+        # embedded quote produced invalid HCL, a backslash an invalid escape,
+        # and a newline split the value across two lines (OP-175).
+        return json.dumps(value)
     if isinstance(value, bool):
         return str(value).lower()
     if isinstance(value, (list, dict)):
