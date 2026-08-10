@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0](https://github.com/devopsgroupeu/Injecto/compare/v0.4.5...v0.5.0) (2026-08-10)
+
+### 🚀 Features
+
+* fail generation when files are dropped, with a machine-readable 422 (OP-214) ([#20](https://github.com/devopsgroupeu/Injecto/issues/20)) ([c371b14](https://github.com/devopsgroupeu/Injecto/commit/c371b14f1e2487f37e6f41ba7965e71b68134f19))
+
 ## [0.4.5](https://github.com/devopsgroupeu/Injecto/compare/v0.4.4...v0.4.5) (2026-08-10)
 
 ### 🐛 Bug Fixes
