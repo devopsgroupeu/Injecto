@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.5](https://github.com/devopsgroupeu/Injecto/compare/v0.4.4...v0.4.5) (2026-08-10)
+
+### 🐛 Bug Fixes
+
+* escape HCL string values and restrict git clone transports (OP-175) ([#19](https://github.com/devopsgroupeu/Injecto/issues/19)) ([8971643](https://github.com/devopsgroupeu/Injecto/commit/89716437a6d5c4ff28ae7c2970b6de89d0fa5520))
+
 ## [0.4.4](https://github.com/devopsgroupeu/Injecto/compare/v0.4.3...v0.4.4) (2026-08-10)
 
 ### 🐛 Bug Fixes
