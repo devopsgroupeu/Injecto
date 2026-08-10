@@ -244,6 +244,91 @@ def test_section_blank_lines_are_left_alone(tmp_path):
     assert out.splitlines()[2] == ""
 
 
+# --- Multi-line values (OP-221) ---
+
+MULTILINE_TEMPLATE = (
+    "# @param services.eks.defaultNodeGroupIamAdditionalPolicies\n"
+    "default_node_group_iam_additional_policies = {\n"
+    '  AmazonEBSCSIDriverPolicy = "arn:aws:iam::aws:policy/EBS"\n'
+    "}\n"
+)
+
+
+def test_supplying_a_multiline_value_raises_instead_of_corrupting(tmp_path):
+    """The whole point: never emit a half-rewritten block with exit 0.
+
+    Before this guard, substituting here produced
+    `... = {"CiGate": "arn:..."}` followed by the orphaned map body and its
+    closing brace — terraform that fails to parse, with no warning.
+    """
+    data = {
+        "services": {
+            "eks": {"defaultNodeGroupIamAdditionalPolicies": {"CiGate": "arn:aws:iam::aws:policy/RO"}}
+        }
+    }
+    input_dir = tmp_path / "in"
+    output_dir = tmp_path / "out"
+    input_dir.mkdir()
+    (input_dir / "terraform.auto.tfvars").write_text(MULTILINE_TEMPLATE, encoding="utf-8")
+
+    with pytest.raises(ValueError) as excinfo:
+        process_files(input_dir, output_dir, data)
+
+    message = str(excinfo.value)
+    assert "terraform.auto.tfvars:2" in message
+    assert "services.eks.defaultNodeGroupIamAdditionalPolicies" in message
+
+    # And the block was left intact rather than half-rewritten.
+    written = (output_dir / "terraform.auto.tfvars").read_text(encoding="utf-8")
+    assert written == MULTILINE_TEMPLATE
+
+
+def test_unsupplied_multiline_param_is_untouched_and_does_not_raise(tmp_path):
+    """Proves the guard is inert for the templates as they ship today.
+
+    Nothing in prepareInjectoData sends this path, so production generation must
+    behave exactly as before — the guard only fires once someone supplies a value.
+    """
+    out = run(tmp_path, {"terraform.auto.tfvars": MULTILINE_TEMPLATE}, EKS_DATA)
+    assert out["terraform.auto.tfvars"] == MULTILINE_TEMPLATE
+
+
+def test_single_line_bracketed_value_still_substitutes(tmp_path):
+    """A balanced map/list on one line is not multi-line and must still work."""
+    template = "# @param cfg.tags\ntags = {}\n"
+    data = {"cfg": {"tags": {"Name": "prod"}}}
+    out = run(tmp_path, {"main.tf": template}, data)["main.tf"]
+    assert out.splitlines()[1] == 'tags = {"Name": "prod"}'
+
+
+def test_bracket_inside_a_quoted_default_does_not_trigger_the_guard(tmp_path):
+    """String literals are blanked before counting, so a quoted `{` is not an opener."""
+    template = '# @param cfg.pattern\npattern = "{"\n'
+    out = run(tmp_path, {"main.tf": template}, {"cfg": {"pattern": "[a-z]+"}})["main.tf"]
+    assert out.splitlines()[1] == 'pattern = "[a-z]+"'
+
+
+def test_bracket_inside_a_trailing_comment_does_not_trigger_the_guard(tmp_path):
+    template = '# @param cfg.value\nvalue = "old"  # see runbook section {3}\n'
+    out = run(tmp_path, {"main.tf": template}, {"cfg": {"value": "new"}})["main.tf"]
+    assert out.splitlines()[1] == 'value = "new"  # see runbook section {3}'
+
+
+def test_every_offending_site_is_reported_not_just_the_first(tmp_path):
+    files = {"a.tfvars": MULTILINE_TEMPLATE, "b.tfvars": MULTILINE_TEMPLATE}
+    data = {"services": {"eks": {"defaultNodeGroupIamAdditionalPolicies": {"x": "y"}}}}
+    input_dir = tmp_path / "in"
+    input_dir.mkdir()
+    for name, content in files.items():
+        (input_dir / name).write_text(content, encoding="utf-8")
+
+    with pytest.raises(ValueError) as excinfo:
+        process_files(input_dir, tmp_path / "out", data)
+
+    assert "a.tfvars:2" in str(excinfo.value)
+    assert "b.tfvars:2" in str(excinfo.value)
+
+
 # --- File handling ---
 
 

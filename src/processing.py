@@ -43,6 +43,28 @@ def get_value_by_path(data: dict, path: str):
         logger.warning(yellow(f"Path '{path}' not found in the data values."))
         return None
 
+_STRING_LITERAL_RE = re.compile(r'"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'')
+
+def opens_multiline_value(value_part: str) -> bool:
+    """
+    True if the value on a @param target line opens a bracket it never closes,
+    i.e. the value continues on following lines.
+
+    Substitution rewrites exactly the line after the decorator, so replacing such
+    a line would emit the new value and orphan the rest of the block along with
+    its closing bracket. String literals are blanked first so a bracket inside a
+    quoted default (e.g. a regex or a "${var.x}" interpolation) is not counted.
+    """
+    without_strings = _STRING_LITERAL_RE.sub('""', value_part)
+    without_comment = without_strings.split('#', 1)[0]
+    depth = 0
+    for char in without_comment:
+        if char in '{[(':
+            depth += 1
+        elif char in '}])':
+            depth -= 1
+    return depth > 0
+
 def format_value_for_file(value):
     """
     Formats a Python value into a string suitable for writing to a config file.
@@ -105,6 +127,10 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
     total_files_modified = 0
     total_replacements = 0
     total_section_toggles = 0
+    # Collected across every file so one run reports all offending sites, then
+    # raised once the loop is done — raising inside the loop would be swallowed
+    # by the per-file exception handler below.
+    multiline_value_sites = []
 
     for file_path in input_dir.rglob("*"):
         if not file_path.is_file():
@@ -183,6 +209,16 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
                             line_prefix = line_structure_match.group(1).rstrip()
                             formatted_new_value = format_value_for_file(value_from_yaml)
                             original_value_part = original_next_line[len(line_structure_match.group(1)):]
+
+                            # Refuse rather than corrupt: rewriting a line that opens a
+                            # multi-line block orphans the rest of it, producing output
+                            # that does not parse. Reported after the run, never silently.
+                            if opens_multiline_value(original_value_part):
+                                multiline_value_sites.append(
+                                    f"{relative_path}:{i + 2} @param {yaml_path}"
+                                )
+                                continue
+
                             trailing_comment_match = re.search(r'(\s*#.*)', original_value_part)
                             trailing_comment = trailing_comment_match.group(1) if trailing_comment_match else ''
                             new_line = f"{line_prefix} {formatted_new_value}{trailing_comment}\n"
@@ -210,3 +246,11 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
             logger.error(red(f"An unexpected error occurred processing {relative_path}: {e}"), exc_info=True)
 
     logger.info(green(f"File processing finished. Modified {total_files_modified} files with {total_replacements} value replacements and {total_section_toggles} section line toggles."))
+
+    if multiline_value_sites:
+        raise ValueError(
+            "Refusing to substitute @param values whose target line opens a multi-line "
+            "block: only the line following the decorator is rewritten, which would "
+            "orphan the rest of the block and emit output that does not parse. "
+            "Affected sites: " + "; ".join(multiline_value_sites)
+        )
