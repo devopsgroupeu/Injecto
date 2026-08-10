@@ -391,27 +391,38 @@ def test_format_value_for_file(value, expected):
 
 
 @pytest.mark.parametrize(
-    "value,emitted",
+    "value,expected",
     [
-        ('say "hi"', '"say "hi""'),
-        ("with\\backslash", '"with\\backslash"'),
-        ("multi\nline", '"multi\nline"'),
+        ('say "hi"', '"say \\"hi\\""'),
+        ("with\\backslash", '"with\\\\backslash"'),
+        ("multi\nline", '"multi\\nline"'),
+        ("tab\there", '"tab\\there"'),
     ],
 )
-def test_format_value_for_file_does_not_escape_known_gap(value, emitted):
-    """Characterisation, NOT an endorsement — these outputs are wrong.
+def test_format_value_for_file_escapes_dangerous_characters(value, expected):
+    """Fixed under OP-175 — these used to emit broken output.
 
-    Strings are wrapped in quotes without escaping, so an embedded quote emits
-    invalid HCL, a backslash emits an invalid escape, and a newline splits the
-    value across two lines — the same corruption class as OP-221, arriving from
+    The naive `f'"{value}"'` form left an embedded quote unescaped (invalid HCL),
+    a backslash unescaped (invalid escape), and a newline literal — which split
+    the value across two lines, the same corruption class as OP-221 arriving from
     the value side instead of the template side.
-
-    Asserted here so the gap is visible and so a fix produces a deliberate,
-    reviewed diff rather than a silent behaviour change. Not fixed in this PR:
-    the obvious fix (json.dumps for strings) also changes the pre-quoted
-    passthrough asserted above, which needs its own check against every producer.
     """
-    assert format_value_for_file(value) == emitted
+    assert format_value_for_file(value) == expected
+
+
+def test_escaping_does_not_change_any_value_that_already_worked():
+    """The fix must be byte-identical wherever the old form was already correct."""
+    for value in ["plain", "", "a:b", "1.32", "my-cluster", "eu-west-1",
+                  "arn:aws:iam::aws:policy/ReadOnlyAccess"]:
+        assert format_value_for_file(value) == f'"{value}"'
+
+
+def test_a_quoted_value_still_survives_the_round_trip_into_a_file(tmp_path):
+    """End-to-end: an embedded quote must land as valid, single-line HCL."""
+    template = '# @param cfg.description\ndescription = "old"\n'
+    out = run(tmp_path, {"main.tf": template}, {"cfg": {"description": 'say "hi"'}})["main.tf"]
+    assert out.splitlines()[1] == 'description = "say \\"hi\\""'
+    assert len(out.splitlines()) == 2  # the value did not break the line
 
 
 # --- deep_merge (OP-192) ---

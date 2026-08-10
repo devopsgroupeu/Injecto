@@ -62,6 +62,9 @@ def clone_repository(repo_url, clone_path, branch=None, username=None, pat=None)
     if branch:
         command.extend(["--branch", branch])
 
+    # `--` ends option parsing, so a URL or path beginning with '-' is treated as
+    # an operand rather than a git option (OP-175).
+    command.append("--")
     command.extend([authenticated_url, clone_path])
 
     # Mask any user:pass@ credentials before logging the command, so an
@@ -69,8 +72,12 @@ def clone_repository(repo_url, clone_path, branch=None, username=None, pat=None)
     logger.info(f"Executing command: {mask_url_credentials(' '.join(command))}")
 
     try:
-        # Run the command
-        subprocess.run(command, check=True, capture_output=True, text=True)
+        # Restrict which transports git will use. `file` and the transport
+        # helpers (`ext::`) are what turn a repository URL into local-file access
+        # or command execution; this repo's URL is operator-supplied today, so
+        # this is defence in depth rather than a fix for a live vector (OP-175).
+        env = {**os.environ, "GIT_ALLOW_PROTOCOL": "https:ssh"}
+        subprocess.run(command, check=True, capture_output=True, text=True, env=env)
         logger.info(green("Repository cloned successfully!"))
         return True
     except subprocess.CalledProcessError as e:
