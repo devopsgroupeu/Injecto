@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.2](https://github.com/devopsgroupeu/Injecto/compare/v0.4.1...v0.4.2) (2026-08-10)
+
+### ♻️ Code Refactoring
+
+* extract the shared git generate pipeline behind both git endpoints ([430064d](https://github.com/devopsgroupeu/Injecto/commit/430064d069a8488c474864218cee820edea73c81))
+
 ## [0.4.1](https://github.com/devopsgroupeu/Injecto/compare/v0.4.0...v0.4.1) (2026-08-10)
 
 ### 🐛 Bug Fixes
