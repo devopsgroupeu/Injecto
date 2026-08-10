@@ -8,6 +8,7 @@ from pathlib import Path
 
 from logs import logger, setLoggingLevel, green, yellow, red, greenBack
 from processing import load_and_merge_data, process_files
+from formatting import run_terraform_fmt
 from git import clone_repository
 
 
@@ -180,6 +181,10 @@ def main():
         # 2. Process Files
         print_section_header("File processing")
         process_files(input_dir, args.output_dir, values_data)
+
+        # 3. Format Terraform files, same as the API paths do
+        print_section_header("Terraform formatting")
+        run_terraform_fmt(args.output_dir)
 
         logger.info(greenBack("Processing finished successfully."))
         sys.exit(0)
