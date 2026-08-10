@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from processing import process_files
+from processing import deep_merge, format_value_for_file, process_files
 
 
 def run(tmp_path: Path, files: dict, data: dict) -> dict:
@@ -327,6 +327,127 @@ def test_every_offending_site_is_reported_not_just_the_first(tmp_path):
 
     assert "a.tfvars:2" in str(excinfo.value)
     assert "b.tfvars:2" in str(excinfo.value)
+
+
+# --- @section nesting and mismatched markers (OP-192) ---
+
+
+def test_nested_sections_apply_the_innermost_condition(tmp_path):
+    template = (
+        "# @section services.eks.enabled begin\n"
+        "outer = true\n"
+        "# @section services.eks.karpenterEnabled begin\n"
+        "inner = true\n"
+        "# @section services.eks.karpenterEnabled end\n"
+        "after_inner = true\n"
+        "# @section services.eks.enabled end\n"
+    )
+    data = {"services": {"eks": {"enabled": True, "karpenterEnabled": False}}}
+    out = run(tmp_path, {"main.tf": template}, data)["main.tf"]
+    lines = out.splitlines()
+    assert lines[1] == "outer = true"
+    assert lines[3] == "# inner = true"
+    # Popping the inner section restores the outer one's condition.
+    assert lines[5] == "after_inner = true"
+
+
+def test_mismatched_section_end_warns_and_leaves_the_stack_alone(tmp_path, caplog):
+    template = (
+        "# @section services.eks.karpenterEnabled begin\n"
+        "body = true\n"
+        "# @section services.eks.somethingElse end\n"
+    )
+    data = {"services": {"eks": {"karpenterEnabled": False}}}
+    with caplog.at_level("WARNING"):
+        out = run(tmp_path, {"main.tf": template}, data)["main.tf"]
+
+    assert any("Mismatched" in r.message for r in caplog.records)
+    # The unclosed section stays active, so its body is still commented.
+    assert "# body = true" in out
+
+
+# --- format_value_for_file (OP-192) ---
+
+
+@pytest.mark.parametrize(
+    "value,expected",
+    [
+        ("plain", '"plain"'),
+        ("", '""'),
+        ("a:b", '"a:b"'),
+        ('"already"', '"already"'),  # pre-quoted values pass through untouched
+        ("'single'", "'single'"),
+        (True, "true"),
+        (False, "false"),
+        (0, "0"),
+        (3.5, "3.5"),
+        (None, "None"),
+        ([1, "a"], '[1, "a"]'),
+        ({"k": "v"}, '{"k": "v"}'),
+    ],
+)
+def test_format_value_for_file(value, expected):
+    assert format_value_for_file(value) == expected
+
+
+@pytest.mark.parametrize(
+    "value,emitted",
+    [
+        ('say "hi"', '"say "hi""'),
+        ("with\\backslash", '"with\\backslash"'),
+        ("multi\nline", '"multi\nline"'),
+    ],
+)
+def test_format_value_for_file_does_not_escape_known_gap(value, emitted):
+    """Characterisation, NOT an endorsement — these outputs are wrong.
+
+    Strings are wrapped in quotes without escaping, so an embedded quote emits
+    invalid HCL, a backslash emits an invalid escape, and a newline splits the
+    value across two lines — the same corruption class as OP-221, arriving from
+    the value side instead of the template side.
+
+    Asserted here so the gap is visible and so a fix produces a deliberate,
+    reviewed diff rather than a silent behaviour change. Not fixed in this PR:
+    the obvious fix (json.dumps for strings) also changes the pre-quoted
+    passthrough asserted above, which needs its own check against every producer.
+    """
+    assert format_value_for_file(value) == emitted
+
+
+# --- deep_merge (OP-192) ---
+
+
+def test_deep_merge_merges_nested_dicts_and_keeps_untouched_keys():
+    target = {"a": {"b": 1}, "keep": 1}
+    assert deep_merge(target, {"a": {"c": 2}}) == {"a": {"b": 1, "c": 2}, "keep": 1}
+
+
+def test_deep_merge_later_source_wins_on_scalar_conflict():
+    assert deep_merge({"x": 1}, {"x": 2}) == {"x": 2}
+
+
+def test_deep_merge_replaces_a_scalar_with_a_dict():
+    assert deep_merge({"x": 5}, {"x": {"now": "dict"}}) == {"x": {"now": "dict"}}
+
+
+def test_deep_merge_replaces_lists_wholesale_rather_than_concatenating():
+    """Tier files override list values; they do not append to them."""
+    assert deep_merge({"list": [1, 2]}, {"list": [3]}) == {"list": [3]}
+
+
+def test_deep_merge_mutates_the_target_in_place():
+    target = {"a": 1}
+    result = deep_merge(target, {"b": 2})
+    assert result is target
+    assert target == {"a": 1, "b": 2}
+
+
+def test_deep_merge_deep_copies_dicts_that_replace_a_scalar():
+    """Guards against a later mutation of the source leaking into the target."""
+    source_branch = {"nested": {"v": 1}}
+    target = deep_merge({"x": 5}, {"x": source_branch})
+    source_branch["nested"]["v"] = 999
+    assert target["x"]["nested"]["v"] == 1
 
 
 # --- File handling ---
