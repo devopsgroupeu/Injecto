@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 import yaml
 
 from logs import logger, green, yellow, red, request_id_var
-from processing import load_and_merge_data, process_files
+from processing import GenerationError, load_and_merge_data, process_files
 from formatting import run_terraform_fmt
 from git import clone_repository
 from version import __version__
@@ -192,6 +192,14 @@ async def process_templates_endpoint(request: ProcessRequest):
 
     except HTTPException:
         raise
+    except GenerationError as e:
+        # 422, not 500: processing worked, the result would just have been silently
+        # wrong. The backend maps `code` to a specific user-facing message (OP-214).
+        logger.error(red(f"Refusing to return generated output: {e.code}: {e.message}"))
+        raise HTTPException(
+            status_code=422,
+            detail={"code": e.code, "message": e.message, "details": e.details},
+        ) from e
     except Exception as e:
         logger.error(red(f"API processing error: {e}"), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
@@ -283,6 +291,14 @@ async def process_with_upload(
 
     except HTTPException:
         raise
+    except GenerationError as e:
+        # 422, not 500: processing worked, the result would just have been silently
+        # wrong. The backend maps `code` to a specific user-facing message (OP-214).
+        logger.error(red(f"Refusing to return generated output: {e.code}: {e.message}"))
+        raise HTTPException(
+            status_code=422,
+            detail={"code": e.code, "message": e.message, "details": e.details},
+        ) from e
     except Exception as e:
         logger.error(red(f"API upload processing error: {e}"), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
@@ -309,6 +325,14 @@ async def process_git_download(request: ProcessRequest):
 
     except HTTPException:
         raise
+    except GenerationError as e:
+        # 422, not 500: processing worked, the result would just have been silently
+        # wrong. The backend maps `code` to a specific user-facing message (OP-214).
+        logger.error(red(f"Refusing to return generated output: {e.code}: {e.message}"))
+        raise HTTPException(
+            status_code=422,
+            detail={"code": e.code, "message": e.message, "details": e.details},
+        ) from e
     except Exception as e:
         logger.error(red(f"API git download processing error: {e}"), exc_info=True)
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")

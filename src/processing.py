@@ -43,6 +43,22 @@ def get_value_by_path(data: dict, path: str):
         logger.warning(yellow(f"Path '{path}' not found in the data values."))
         return None
 
+class GenerationError(ValueError):
+    """
+    Raised when processing completed but the output would be silently wrong.
+
+    Subclasses ValueError so existing callers that catch ValueError keep working;
+    carries a machine-readable code and details so the API can return a 422 the
+    backend can turn into a specific user-facing message rather than "500" (OP-214).
+    """
+
+    def __init__(self, code: str, message: str, details: list):
+        super().__init__(f"{message} {'; '.join(details)}")
+        self.code = code
+        self.message = message
+        self.details = details
+
+
 _STRING_LITERAL_RE = re.compile(r'"(?:[^"\\]|\\.)*"|\'(?:[^\'\\]|\\.)*\'')
 
 def opens_multiline_value(value_part: str) -> bool:
@@ -136,11 +152,16 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
     # raised once the loop is done — raising inside the loop would be swallowed
     # by the per-file exception handler below.
     multiline_value_sites = []
+    # A file that throws is never written, so before OP-214 it simply vanished from
+    # the output while the run reported success. Collected here and raised below.
+    failed_files = []
+    input_file_count = 0
 
     for file_path in input_dir.rglob("*"):
         if not file_path.is_file():
             continue
 
+        input_file_count += 1
         relative_path = file_path.relative_to(input_dir)
         output_path = output_dir / relative_path
 
@@ -248,14 +269,35 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
                 logger.debug(f"  -> Skipping unmodified file (in-place edit): {relative_path}")
 
         except Exception as e:
+            # Keep going so one bad file does not hide the others, but record it:
+            # this file produced no output and the caller must not be told success.
             logger.error(red(f"An unexpected error occurred processing {relative_path}: {e}"), exc_info=True)
+            failed_files.append(f"{relative_path}: {type(e).__name__}: {e}")
 
     logger.info(green(f"File processing finished. Modified {total_files_modified} files with {total_replacements} value replacements and {total_section_toggles} section line toggles."))
 
+    if failed_files:
+        raise GenerationError(
+            "FILES_FAILED",
+            "Files could not be processed and are missing from the output. Returning "
+            "a partial tree would hand over infrastructure with pieces silently absent.",
+            failed_files,
+        )
+
+    output_file_count = sum(1 for p in output_dir.rglob("*") if p.is_file())
+    if output_file_count != input_file_count:
+        raise GenerationError(
+            "FILE_COUNT_MISMATCH",
+            "The output tree does not contain one file per input file, so something was "
+            "dropped without raising.",
+            [f"{input_file_count} files in, {output_file_count} files out"],
+        )
+
     if multiline_value_sites:
-        raise ValueError(
+        raise GenerationError(
+            "MULTILINE_VALUE",
             "Refusing to substitute @param values whose target line opens a multi-line "
             "block: only the line following the decorator is rewritten, which would "
-            "orphan the rest of the block and emit output that does not parse. "
-            "Affected sites: " + "; ".join(multiline_value_sites)
+            "orphan the rest of the block and emit output that does not parse.",
+            multiline_value_sites,
         )
