@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.4](https://github.com/devopsgroupeu/Injecto/compare/v0.4.3...v0.4.4) (2026-08-10)
+
+### 🐛 Bug Fixes
+
+* reject upload filenames that escape the input directory (OP-192) ([#18](https://github.com/devopsgroupeu/Injecto/issues/18)) ([cb1c3e3](https://github.com/devopsgroupeu/Injecto/commit/cb1c3e3f2f4fc86b4fcf237c371ee8df030e6c9c))
+
 ## [0.4.3](https://github.com/devopsgroupeu/Injecto/compare/v0.4.2...v0.4.3) (2026-08-10)
 
 ### 🐛 Bug Fixes
