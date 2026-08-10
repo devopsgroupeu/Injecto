@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.1](https://github.com/devopsgroupeu/Injecto/compare/v0.4.0...v0.4.1) (2026-08-10)
+
+### 🐛 Bug Fixes
+
+* run terraform fmt in the CLI path, not only the API ([#14](https://github.com/devopsgroupeu/Injecto/issues/14)) ([1a660eb](https://github.com/devopsgroupeu/Injecto/commit/1a660eb7cdee57abff93f6e37d6164a7b7ffe112))
+
 ## [0.4.0](https://github.com/devopsgroupeu/Injecto/compare/v0.3.3...v0.4.0) (2026-07-07)
 
 ### 🚀 Features
