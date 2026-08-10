@@ -73,6 +73,31 @@ def create_temp_directory() -> Path:
     logger.debug(f"Created temporary directory: {temp_dir}")
     return temp_dir
 
+def safe_upload_path(base_dir: Path, filename: str) -> Path:
+    """
+    Resolve a client-supplied upload filename to a path that cannot escape base_dir.
+
+    UploadFile.filename comes from the request and FastAPI does not sanitise it.
+    Two escapes matter, and the second is the surprising one:
+
+      - `..` segments walk out of the directory, and the caller creates the parent
+        for us, so the walk succeeds.
+      - an ABSOLUTE filename replaces the base entirely: Path("/in") / "/etc/x"
+        is "/etc/x", not "/in/etc/x".
+
+    Nested names are legitimate (templates ship in subdirectories), so the
+    directory structure is preserved — only escapes are rejected.
+    """
+    if not filename or not filename.strip():
+        raise HTTPException(status_code=400, detail="Upload is missing a filename")
+
+    base = base_dir.resolve()
+    candidate = (base / filename).resolve()
+    if candidate == base or not candidate.is_relative_to(base):
+        logger.warning(yellow(f"Rejected upload filename escaping the input directory: {filename!r}"))
+        raise HTTPException(status_code=400, detail=f"Unsafe upload filename: {filename!r}")
+    return candidate
+
 def cleanup_temp_directory(temp_dir: Path):
     """Clean up temporary directory."""
     if temp_dir.exists():
@@ -203,10 +228,16 @@ async def process_with_upload(
             yaml_data = {}
             temp_config_files = []
 
-            for config_file in config_files:
-                # Save config file temporarily
+            for index, config_file in enumerate(config_files):
+                # Save config file temporarily. Only the basename is kept: these are
+                # merged as YAML and their directory structure is never used, so the
+                # simplest safe form is also the correct one. The index keeps two
+                # uploads with the same basename from overwriting each other.
                 config_content = await config_file.read()
-                temp_config_path = temp_dir / f"config_{config_file.filename}"
+                safe_name = Path(config_file.filename or "").name
+                if not safe_name:
+                    raise HTTPException(status_code=400, detail="Config upload is missing a filename")
+                temp_config_path = temp_dir / f"config_{index}_{safe_name}"
                 with open(temp_config_path, 'wb') as f:
                     f.write(config_content)
                 temp_config_files.append(temp_config_path)
@@ -231,7 +262,7 @@ async def process_with_upload(
 
         # Save uploaded files
         for file in files:
-            file_path = input_dir / file.filename
+            file_path = safe_upload_path(input_dir, file.filename)
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
             content = await file.read()
