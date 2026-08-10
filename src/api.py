@@ -107,6 +107,42 @@ async def health_check():
     """Health check endpoint."""
     return HealthResponse(status="healthy", version=__version__)
 
+def generate_from_git(request: ProcessRequest, temp_dir: Path) -> Path:
+    """Clone, process and format into a fresh output dir; return that dir.
+
+    Shared by /process and /process-git-download, which differ only in what they
+    hand back: a JSON summary or the tree as a ZIP. Keeping the pipeline in one
+    place is what stops them drifting apart - /process used to skip
+    run_terraform_fmt, so the same request produced differently formatted
+    Terraform depending on which endpoint you asked.
+    """
+    if not request.repo_url:
+        raise HTTPException(status_code=400, detail="repo_url is required when source is 'git'")
+
+    clone_path = temp_dir / "clone"
+    if not clone_repository(
+        repo_url=request.repo_url,
+        clone_path=str(clone_path),
+        branch=request.branch,
+    ):
+        raise HTTPException(status_code=400, detail="Failed to clone repository")
+
+    input_dir = clone_path / request.input_dir
+    if not input_dir.exists():
+        raise HTTPException(status_code=400, detail=f"Input directory '{request.input_dir}' not found in repository")
+
+    yaml_file = temp_dir / "data.yaml"
+    with open(yaml_file, 'w') as f:
+        yaml.dump(request.data, f)
+    merged_data = load_and_merge_data([yaml_file])
+
+    output_dir = temp_dir / "output"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    process_files(input_dir, output_dir, merged_data)
+    run_terraform_fmt(output_dir)
+    return output_dir
+
+
 @app.post("/process", response_model=ProcessResponse, dependencies=[Depends(require_service_token)])
 async def process_templates_endpoint(request: ProcessRequest):
     """
@@ -114,59 +150,19 @@ async def process_templates_endpoint(request: ProcessRequest):
     Returns a summary of the processing results.
     """
     temp_dir = None
-    errors = []
-    files_processed = 0
 
     try:
-        # Validate request
-        if request.source == "git" and not request.repo_url:
-            raise HTTPException(status_code=400, detail="repo_url is required when source is 'git'")
+        if request.source != "git":
+            raise HTTPException(status_code=400, detail="Local source requires the /process-upload endpoint")
 
-        # Create temporary directories
         temp_dir = create_temp_directory()
-        input_dir = temp_dir / "input"
-        output_dir = temp_dir / "output"
-
-        if request.source == "git":
-            # Clone repository
-            clone_path = temp_dir / "clone"
-            success = clone_repository(
-                repo_url=request.repo_url,
-                clone_path=str(clone_path),
-                branch=request.branch
-            )
-            if not success:
-                raise HTTPException(status_code=400, detail="Failed to clone repository")
-
-            # Set input directory to the specified path within the clone
-            actual_input_dir = clone_path / request.input_dir
-            if not actual_input_dir.exists():
-                raise HTTPException(status_code=400, detail=f"Input directory '{request.input_dir}' not found in repository")
-        else:
-            # For local source, we'll need to handle file uploads differently
-            # For now, return an error as local files need to be uploaded
-            raise HTTPException(status_code=400, detail="Local source requires file upload endpoint")
-
-        # Create output directory
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Save YAML data to a temporary file for processing
-        yaml_file = temp_dir / "data.yaml"
-        with open(yaml_file, 'w') as f:
-            yaml.dump(request.data, f)
-
-        # Load and merge data
-        merged_data = load_and_merge_data([yaml_file])
-
-        # Process files with @param and @section directives
-        process_files(actual_input_dir, output_dir, merged_data)
-        files_processed = len(list(output_dir.rglob("*")))
+        output_dir = generate_from_git(request, temp_dir)
 
         return ProcessResponse(
             status="success",
             message="Configuration files processed successfully",
-            files_processed=files_processed,
-            errors=errors
+            files_processed=len(list(output_dir.rglob("*"))),
+            errors=[]
         )
 
     except HTTPException:
@@ -272,47 +268,12 @@ async def process_git_download(request: ProcessRequest):
     temp_dir = None
 
     try:
-        # Validate request
-        if request.source != "git" or not request.repo_url:
+        if request.source != "git":
             raise HTTPException(status_code=400, detail="This endpoint requires git source with repo_url")
 
-        # Create temporary directories
         temp_dir = create_temp_directory()
-        clone_path = temp_dir / "clone"
-        output_dir = temp_dir / "output"
+        output_dir = generate_from_git(request, temp_dir)
 
-        # Clone repository
-        success = clone_repository(
-            repo_url=request.repo_url,
-            clone_path=str(clone_path),
-            branch=request.branch
-        )
-        if not success:
-            raise HTTPException(status_code=400, detail="Failed to clone repository")
-
-        # Set input directory to the specified path within the clone
-        actual_input_dir = clone_path / request.input_dir
-        if not actual_input_dir.exists():
-            raise HTTPException(status_code=400, detail=f"Input directory '{request.input_dir}' not found in repository")
-
-        # Create output directory
-        output_dir.mkdir(parents=True, exist_ok=True)
-
-        # Save YAML data to a temporary file for processing
-        yaml_file = temp_dir / "data.yaml"
-        with open(yaml_file, 'w') as f:
-            yaml.dump(request.data, f)
-
-        # Load and merge data
-        merged_data = load_and_merge_data([yaml_file])
-
-        # Process files with @param and @section directives
-        process_files(actual_input_dir, output_dir, merged_data)
-
-        # Format Terraform files
-        run_terraform_fmt(output_dir)
-
-        # Return zip file with results
         return create_zip_response(output_dir)
 
     except HTTPException:
