@@ -9,8 +9,8 @@ from pathlib import Path
 
 import pytest
 
-import processing
-from processing import GenerationError, process_files
+import injecto.processing as processing
+from injecto.processing import GenerationError, process_files
 
 
 def build(tmp_path, files):

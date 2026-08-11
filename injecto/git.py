@@ -4,7 +4,7 @@ import subprocess
 import os
 import re
 
-from logs import logger, green, yellow, red
+from .logs import logger, green, yellow, red
 
 # Matches the "user:pass@" segment of a URL so credentials (e.g. a git PAT in an
 # authenticated clone URL) can be stripped before anything is written to logs.

@@ -9,7 +9,7 @@ that first job green.
 import subprocess
 from pathlib import Path
 
-from logs import logger, green, yellow
+from .logs import logger, green, yellow
 
 
 def run_terraform_fmt(output_dir: Path):

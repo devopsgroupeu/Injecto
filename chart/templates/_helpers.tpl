@@ -74,7 +74,8 @@ Return the command to run Injecto in API mode
 */}}
 {{- define "injecto.command" -}}
 - python
-- ./src/main.py
+- -m
+- injecto.main
 - --api
 {{- if .Values.injecto.api.host }}
 - --host

@@ -1,11 +1,16 @@
 # Use a slim Python image for a smaller footprint
 FROM python:3.13-slim
 
+# The release version, passed in by the publish workflow. It is not just a
+# label: it is written into the package below so /health and the OpenAPI docs
+# report the version that is actually running. The default marks a local build.
+ARG INJECTO_VERSION=0.0.0-dev
+
 # Label the image with metadata
 # This helps with image identification and compliance
 LABEL org.opencontainers.image.title="injecto"
 LABEL org.opencontainers.image.description="A Python tool that automatically replaces placeholders in code or configuration files with values from a YAML file"
-LABEL org.opencontainers.image.version="0.3.0"
+LABEL org.opencontainers.image.version="${INJECTO_VERSION}"
 LABEL org.opencontainers.image.source="https://github.com/devopsgroupeu/Injecto"
 LABEL org.opencontainers.image.authors="Andrej Rabek <andrej.rabek@devopsgroup.sk>"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
@@ -38,7 +43,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the source code directory into the container's working directory
-COPY src/ ./src/
+COPY injecto/ ./injecto/
+
+# Stamp the release version into the package. The publish workflow builds from
+# the commit that TRIGGERED the release, which is one commit older than
+# semantic-release's own `chore(release)` commit - so without this the image
+# would always report the previous version.
+RUN echo "__version__ = \"${INJECTO_VERSION}\"" > ./injecto/version.py
 
 # Change ownership of the app directory to the non-root user
 # This is important if the entrypoint needs to write files (though our script writes outside /app)
@@ -52,4 +63,4 @@ EXPOSE 8000
 # Define the entrypoint for the container.
 # This makes the container behave like an executable for the script.
 # Arguments passed to `docker run` will be appended to this command.
-ENTRYPOINT ["python", "./src/main.py"]
+ENTRYPOINT ["python", "-m", "injecto.main"]

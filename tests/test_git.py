@@ -1,6 +1,6 @@
 """Tests for git URL credential masking (keeps PATs out of the logs)."""
 
-from git import mask_url_credentials
+from injecto.git import mask_url_credentials
 
 
 def test_masks_user_and_pat_in_https_url():
