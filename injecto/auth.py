@@ -17,7 +17,7 @@ from typing import Optional
 
 from fastapi import Header, HTTPException
 
-from logs import logger, yellow
+from .logs import logger, yellow
 
 SERVICE_TOKEN = os.getenv("SERVICE_TOKEN")
 

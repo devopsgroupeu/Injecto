@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "injecto"
+description = "Processes @param and @section directives in configuration files using YAML data"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+authors = [{ name = "Andrej Rabek", email = "andrej.rabek@devopsgroup.sk" }]
+dynamic = ["version", "dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/devopsgroupeu/Injecto"
+
+[project.scripts]
+injecto = "injecto.main:main"
+
+[tool.setuptools]
+packages = ["injecto"]
+
+[tool.setuptools.dynamic]
+version = { attr = "injecto.version.__version__" }
+# requirements.txt stays the single source of runtime dependencies: it is what
+# the Dockerfile installs, and duplicating the list here is how the two drift.
+dependencies = { file = ["requirements.txt"] }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from processing import deep_merge, format_value_for_file, process_files
+from injecto.processing import deep_merge, format_value_for_file, process_files
 
 
 def run(tmp_path: Path, files: dict, data: dict) -> dict:

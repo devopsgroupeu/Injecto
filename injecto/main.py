@@ -6,10 +6,10 @@ import shutil
 import sys
 from pathlib import Path
 
-from logs import logger, setLoggingLevel, green, yellow, red, greenBack
-from processing import load_and_merge_data, process_files
-from formatting import run_terraform_fmt
-from git import clone_repository
+from .logs import logger, setLoggingLevel, green, yellow, red, greenBack
+from .processing import load_and_merge_data, process_files
+from .formatting import run_terraform_fmt
+from .git import clone_repository
 
 
 # --- Configuration ---
@@ -120,7 +120,7 @@ def main():
 
     # Handle API mode
     if args.api:
-        from api import run_api_server
+        from .api import run_api_server
         log_level = logging.DEBUG if args.debug else LOG_LEVEL
         setLoggingLevel(log_level)
         run_api_server(host=args.host, port=args.port, debug=args.debug)

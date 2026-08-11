@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from api import safe_upload_path
+from injecto.api import safe_upload_path
 
 
 @pytest.fixture

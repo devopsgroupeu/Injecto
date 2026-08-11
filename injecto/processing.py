@@ -8,7 +8,7 @@ import re
 import copy
 import shutil
 
-from logs import logger, green, yellow, red
+from .logs import logger, green, yellow, red
 
 # --- Helper Functions ---
 
@@ -199,9 +199,9 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
                             file_was_modified = True
                             total_section_toggles += 1
                     elif not should_be_commented and is_commented:
-                        uncommented_line = re.sub(r'#\s?', '', line, 1).lstrip()
+                        uncommented_line = re.sub(r'#\s?', '', line, count=1).lstrip()
                         if not uncommented_line.startswith('@param') and not uncommented_line.startswith('@section'):
-                            section_modified_lines[i] = re.sub(r'#\s?', '', line, 1)
+                            section_modified_lines[i] = re.sub(r'#\s?', '', line, count=1)
                             if section_modified_lines[i] != line:
                                 file_was_modified = True
                                 total_section_toggles += 1

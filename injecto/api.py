@@ -5,6 +5,7 @@ import tempfile
 import shutil
 import zipfile
 import io
+from contextlib import contextmanager
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -15,12 +16,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import yaml
 
-from logs import logger, green, yellow, red, request_id_var
-from processing import GenerationError, load_and_merge_data, process_files
-from formatting import run_terraform_fmt
-from git import clone_repository
-from version import __version__
-from auth import require_service_token
+from .logs import logger, green, yellow, red, request_id_var
+from .processing import GenerationError, load_and_merge_data, process_files
+from .formatting import run_terraform_fmt
+from .git import clone_repository
+from .version import __version__
+from .auth import require_service_token
 
 # --- FastAPI App Setup ---
 app = FastAPI(
@@ -47,7 +48,11 @@ async def request_id_middleware(request: Request, call_next):
 
 class ProcessRequest(BaseModel):
     """Request model for processing configuration files."""
-    source: str = Field(default="local", description="Source type: 'local' or 'git'")
+    # Defaults to "git": both endpoints taking this model require a git source,
+    # so the previous "local" default guaranteed a 400 whenever the field was
+    # omitted. Local files are uploaded to /process-upload, which does not use
+    # this model at all.
+    source: str = Field(default="git", description="Source type: only 'git' is accepted; upload local files to /process-upload")
     repo_url: Optional[str] = Field(default=None, description="Git repository URL (required if source is 'git')")
     branch: Optional[str] = Field(default=None, description="Git branch to clone")
     input_dir: str = Field(description="Input directory path within the source")
@@ -106,6 +111,41 @@ def cleanup_temp_directory(temp_dir: Path):
             logger.debug(f"Cleaned up temporary directory: {temp_dir}")
         except Exception as e:
             logger.warning(yellow(f"Failed to cleanup temporary directory {temp_dir}: {e}"))
+
+
+@contextmanager
+def processing_request(what: str):
+    """Own the scratch directory and the error translation for one request.
+
+    All three processing endpoints ran the same twenty-five lines of
+    try/except/finally. The GenerationError arm is the load-bearing one
+    (OP-214): it is what makes a silently-wrong generation answer 422 instead
+    of 500, and keeping three byte-identical copies of it in step by hand is
+    exactly how one of them drifts back to a 500.
+    """
+    temp_dir = None
+    try:
+        temp_dir = create_temp_directory()
+        yield temp_dir
+
+    except HTTPException:
+        raise
+    except GenerationError as e:
+        # 422, not 500: processing worked, the result would just have been silently
+        # wrong. The backend maps `code` to a specific user-facing message (OP-214).
+        logger.error(red(f"Refusing to return generated output: {e.code}: {e.message}"))
+        raise HTTPException(
+            status_code=422,
+            detail={"code": e.code, "message": e.message, "details": e.details},
+        ) from e
+    except Exception as e:
+        logger.error(red(f"API {what} error: {e}"), exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+
+    finally:
+        if temp_dir:
+            cleanup_temp_directory(temp_dir)
+
 
 def create_zip_response(output_dir: Path) -> StreamingResponse:
     """Create a zip file response from the output directory."""
@@ -171,16 +211,17 @@ def generate_from_git(request: ProcessRequest, temp_dir: Path) -> Path:
 @app.post("/process", response_model=ProcessResponse, dependencies=[Depends(require_service_token)])
 async def process_templates_endpoint(request: ProcessRequest):
     """
-    Process configuration files with YAML data using @param and @section directives.
-    Returns a summary of the processing results.
-    """
-    temp_dir = None
+    Dry run: process configuration files from Git and report whether the
+    generation succeeds, without returning the tree.
 
-    try:
+    Runs the identical pipeline as /process-git-download and then discards the
+    output, so it answers "would this configuration generate cleanly?" -
+    including the 422 refusals - at no transfer cost.
+    """
+    with processing_request("processing") as temp_dir:
         if request.source != "git":
             raise HTTPException(status_code=400, detail="Local source requires the /process-upload endpoint")
 
-        temp_dir = create_temp_directory()
         output_dir = generate_from_git(request, temp_dir)
 
         return ProcessResponse(
@@ -189,24 +230,6 @@ async def process_templates_endpoint(request: ProcessRequest):
             files_processed=len(list(output_dir.rglob("*"))),
             errors=[]
         )
-
-    except HTTPException:
-        raise
-    except GenerationError as e:
-        # 422, not 500: processing worked, the result would just have been silently
-        # wrong. The backend maps `code` to a specific user-facing message (OP-214).
-        logger.error(red(f"Refusing to return generated output: {e.code}: {e.message}"))
-        raise HTTPException(
-            status_code=422,
-            detail={"code": e.code, "message": e.message, "details": e.details},
-        ) from e
-    except Exception as e:
-        logger.error(red(f"API processing error: {e}"), exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
-
-    finally:
-        if temp_dir:
-            cleanup_temp_directory(temp_dir)
 
 @app.post("/process-upload", dependencies=[Depends(require_service_token)])
 async def process_with_upload(
@@ -224,12 +247,7 @@ async def process_with_upload(
 
     Returns a zip file with processed results.
     """
-    temp_dir = None
-
-    try:
-        # Create temporary directories first
-        temp_dir = create_temp_directory()
-
+    with processing_request("upload processing") as temp_dir:
         # Parse YAML data - either from config_files or data parameter
         if config_files:
             # Process uploaded YAML files
@@ -289,57 +307,21 @@ async def process_with_upload(
         # Return zip file with results
         return create_zip_response(output_dir)
 
-    except HTTPException:
-        raise
-    except GenerationError as e:
-        # 422, not 500: processing worked, the result would just have been silently
-        # wrong. The backend maps `code` to a specific user-facing message (OP-214).
-        logger.error(red(f"Refusing to return generated output: {e.code}: {e.message}"))
-        raise HTTPException(
-            status_code=422,
-            detail={"code": e.code, "message": e.message, "details": e.details},
-        ) from e
-    except Exception as e:
-        logger.error(red(f"API upload processing error: {e}"), exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
-
-    finally:
-        if temp_dir:
-            cleanup_temp_directory(temp_dir)
-
 @app.post("/process-git-download", dependencies=[Depends(require_service_token)])
 async def process_git_download(request: ProcessRequest):
     """
     Process configuration files from Git repository and return a zip file with results.
-    """
-    temp_dir = None
 
-    try:
+    This is the endpoint the OpenPrime backend calls; /process runs the same
+    pipeline but reports a summary instead of returning the tree.
+    """
+    with processing_request("git download processing") as temp_dir:
         if request.source != "git":
             raise HTTPException(status_code=400, detail="This endpoint requires git source with repo_url")
 
-        temp_dir = create_temp_directory()
         output_dir = generate_from_git(request, temp_dir)
 
         return create_zip_response(output_dir)
-
-    except HTTPException:
-        raise
-    except GenerationError as e:
-        # 422, not 500: processing worked, the result would just have been silently
-        # wrong. The backend maps `code` to a specific user-facing message (OP-214).
-        logger.error(red(f"Refusing to return generated output: {e.code}: {e.message}"))
-        raise HTTPException(
-            status_code=422,
-            detail={"code": e.code, "message": e.message, "details": e.details},
-        ) from e
-    except Exception as e:
-        logger.error(red(f"API git download processing error: {e}"), exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
-
-    finally:
-        if temp_dir:
-            cleanup_temp_directory(temp_dir)
 
 # --- Server startup ---
 def run_api_server(host: str = "0.0.0.0", port: int = 8000, debug: bool = False):
@@ -350,7 +332,7 @@ def run_api_server(host: str = "0.0.0.0", port: int = 8000, debug: bool = False)
     logger.info(green(f"Starting Injecto API server on {host}:{port}"))
 
     uvicorn.run(
-        "api:app",
+        "injecto.api:app",
         host=host,
         port=port,
         log_level=log_level,

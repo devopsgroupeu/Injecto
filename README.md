@@ -18,7 +18,7 @@ A Python tool that automatically replaces placeholders in code or configuration 
 #### With local source of template files
 
 ```sh
-python3 src/main.py \
+python3 -m injecto.main \
     --input-dir ~/my-local-templates/ \
     --output-dir ./output \
     --data-files ~/data/00_base.yaml ~/data/10_override.yaml
@@ -27,7 +27,7 @@ python3 src/main.py \
 #### With git repository as source of template files
 
 ```sh
-python3 src/main.py \
+python3 -m injecto.main \
     --source git \
     --repo-url https://github.com/devopsgroupeu/openprime-infra-templates.git \
     --branch main \
