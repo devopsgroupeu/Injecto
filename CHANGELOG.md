@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1](https://github.com/devopsgroupeu/Injecto/compare/v0.5.0...v0.5.1) (2026-08-11)
+
+### 🐛 Bug Fixes
+
+* **packaging:** run Injecto as a real package and report the running version ([#21](https://github.com/devopsgroupeu/Injecto/issues/21)) ([48eea58](https://github.com/devopsgroupeu/Injecto/commit/48eea58a119d0f0545b4845ef17ba69253d5d39d))
+
 ## [0.5.0](https://github.com/devopsgroupeu/Injecto/compare/v0.4.5...v0.5.0) (2026-08-10)
 
 ### 🚀 Features
