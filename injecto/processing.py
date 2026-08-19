@@ -9,6 +9,13 @@ import copy
 import shutil
 
 from .logs import logger, green, yellow, red
+from .decorators import (
+    PARAM_RE,
+    SECTION_BEGIN_RE,
+    SECTION_END_RE,
+    VALUE_LINE_RE,
+    DECORATOR_PREFIXES,
+)
 
 # --- Helper Functions ---
 
@@ -181,8 +188,8 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
             active_sections = []  # Stack for handling nested sections
 
             for i, line in enumerate(lines):
-                section_begin_match = re.search(r'#\s*@section\s+([\w.-]+)\s+begin', line)
-                section_end_match = re.search(r'#\s*@section\s+([\w.-]+)\s+end', line)
+                section_begin_match = SECTION_BEGIN_RE.search(line)
+                section_end_match = SECTION_END_RE.search(line)
                 is_marker_line = section_begin_match or section_end_match
 
                 # Apply transformation based on the current section state
@@ -200,7 +207,7 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
                             total_section_toggles += 1
                     elif not should_be_commented and is_commented:
                         uncommented_line = re.sub(r'#\s?', '', line, count=1).lstrip()
-                        if not uncommented_line.startswith('@param') and not uncommented_line.startswith('@section'):
+                        if not uncommented_line.startswith(DECORATOR_PREFIXES):
                             section_modified_lines[i] = re.sub(r'#\s?', '', line, count=1)
                             if section_modified_lines[i] != line:
                                 file_was_modified = True
@@ -220,7 +227,7 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
             # --- Pass 2: Handle @param replacements ---
             final_lines = list(section_modified_lines)
             for i, line in enumerate(section_modified_lines):
-                param_match = re.search(r'#\s*@param\s+([\w.-]+)', line)
+                param_match = PARAM_RE.search(line)
                 if param_match and (i + 1) < len(section_modified_lines):
                     yaml_path = param_match.group(1)
                     value_from_yaml = get_value_by_path(data, yaml_path)
@@ -230,7 +237,7 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
                         if original_next_line.lstrip().startswith('#'):
                             continue
 
-                        line_structure_match = re.match(r'^(\s*(?:-\s+)?[\w.-]+\s*[:=])', original_next_line)
+                        line_structure_match = VALUE_LINE_RE.match(original_next_line)
                         if line_structure_match:
                             line_prefix = line_structure_match.group(1).rstrip()
                             formatted_new_value = format_value_for_file(value_from_yaml)

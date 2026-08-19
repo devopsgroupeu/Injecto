@@ -58,7 +58,6 @@ def cleanup_temp_files(temp_path):
 
 def main():
     """Main function to parse arguments and run the application."""
-    display_banner()
     parser = argparse.ArgumentParser(
         description="Replaces values in files based on '# @param' comments and YAML data files.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -104,6 +103,28 @@ def main():
         help="Run as API server instead of CLI processing."
     )
     parser.add_argument(
+        "--extract-catalog",
+        metavar="REPO_ROOT",
+        type=str,
+        help="Extract the wizard catalog from a templates repo and print it as JSON."
+    )
+    parser.add_argument(
+        "--provider",
+        type=str,
+        default="aws",
+        help="Provider directory to scan (only used with --extract-catalog)."
+    )
+    parser.add_argument(
+        "--strict",
+        action="store_true",
+        help="Exit non-zero when extraction reports errors (only used with --extract-catalog)."
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        help="Write extracted catalog JSON here instead of stdout."
+    )
+    parser.add_argument(
         "--host",
         type=str,
         default="0.0.0.0",
@@ -117,6 +138,24 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # The banner is decoration on stdout. Catalog extraction writes JSON there
+    # for OP-205's CI gate to consume, so it must stay the only thing on stdout.
+    if not args.extract_catalog:
+        display_banner()
+
+    # Handle catalog extraction mode
+    if args.extract_catalog:
+        from .catalog import run_cli as run_catalog_cli
+        # Deliberately no setLoggingLevel here: the logger writes JSON to stdout
+        # for container log collection, and stdout is the catalog document.
+        # Extraction reports through the document's errors[]/warnings[] instead.
+        argv = [args.extract_catalog, "--provider", args.provider]
+        if args.strict:
+            argv.append("--strict")
+        if args.output:
+            argv += ["--output", args.output]
+        sys.exit(run_catalog_cli(argv))
 
     # Handle API mode
     if args.api:

@@ -1,0 +1,3 @@
+# @param paths whose Terraform variable predates the naming conventions.
+# Each entry is a permanent exception -- prefer renaming the variable.
+services.vpc.natGateway
