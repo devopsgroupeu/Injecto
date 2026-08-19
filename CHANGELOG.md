@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0](https://github.com/devopsgroupeu/Injecto/compare/v0.5.1...v0.6.0) (2026-08-19)
+
+### 🚀 Features
+
+* **catalog:** extract the wizard service catalog from decorated templates (OP-204) ([#22](https://github.com/devopsgroupeu/Injecto/issues/22)) ([03e5c0f](https://github.com/devopsgroupeu/Injecto/commit/03e5c0f5d75c95b7e0b40e6da392211078891132))
+
 ## [0.5.1](https://github.com/devopsgroupeu/Injecto/compare/v0.5.0...v0.5.1) (2026-08-11)
 
 ### 🐛 Bug Fixes
