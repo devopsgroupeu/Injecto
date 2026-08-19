@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0](https://github.com/devopsgroupeu/Injecto/compare/v0.6.0...v0.7.0) (2026-08-19)
+
+### 🚀 Features
+
+* **catalog:** serve the catalog over an authenticated, sha-cached GET /catalog (OP-204) ([#23](https://github.com/devopsgroupeu/Injecto/issues/23)) ([8008b00](https://github.com/devopsgroupeu/Injecto/commit/8008b0051896bca7d2fc2059111432c5f54da1ec))
+
 ## [0.6.0](https://github.com/devopsgroupeu/Injecto/compare/v0.5.1...v0.6.0) (2026-08-19)
 
 ### 🚀 Features
