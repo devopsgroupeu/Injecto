@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 
 import logging
+import os
+import subprocess
 import tempfile
 import shutil
+import time
 import zipfile
 import io
 from contextlib import contextmanager
@@ -11,15 +14,16 @@ from typing import List, Optional, Dict, Any
 
 import uuid
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Request
-from fastapi.responses import StreamingResponse
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Depends, Request, Header, Query, Response
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 import yaml
 
 from .logs import logger, green, yellow, red, request_id_var
 from .processing import GenerationError, load_and_merge_data, process_files
 from .formatting import run_terraform_fmt
-from .git import clone_repository
+from .catalog import extract_catalog
+from .git import clone_repository, mask_url_credentials
 from .version import __version__
 from .auth import require_service_token
 
@@ -342,3 +346,135 @@ def run_api_server(host: str = "0.0.0.0", port: int = 8000, debug: bool = False)
 
 if __name__ == "__main__":
     run_api_server(debug=True)
+
+
+# --- Catalog endpoint ------------------------------------------------------
+
+# Injecto clones whatever repo it is handed, so the catalog endpoint is a
+# server-side request forgery primitive unless the target is constrained. The
+# allowlist holds URL prefixes; empty means the endpoint is disabled rather
+# than unrestricted, because an unset variable must never be the permissive case.
+CATALOG_REPO_ALLOWLIST = [
+    prefix.strip()
+    for prefix in os.getenv("CATALOG_REPO_ALLOWLIST", "").split(",")
+    if prefix.strip()
+]
+
+# git ls-remote is one network round trip against the remote tip. Memoizing it
+# briefly keeps a burst of wizard loads from making one call each, while staying
+# short enough that a templates merge shows up within the same minute.
+CATALOG_SHA_TTL_SECONDS = 30
+CATALOG_LS_REMOTE_TIMEOUT_SECONDS = 10
+CATALOG_CLONE_TIMEOUT_SECONDS = 60
+
+_sha_cache: Dict[tuple, tuple] = {}
+_catalog_cache: Dict[tuple, tuple] = {}
+
+
+def repo_is_allowed(repo_url: str) -> bool:
+    return any(repo_url.startswith(prefix) for prefix in CATALOG_REPO_ALLOWLIST)
+
+
+def resolve_remote_sha(repo_url: str, branch: str) -> Optional[str]:
+    """Return the commit sha at the remote tip, or None if it cannot be read.
+
+    Reading the sha without cloning is what makes the cache worth having: an
+    unchanged templates repo costs one ls-remote instead of a clone plus a full
+    extraction.
+    """
+    cache_key = (repo_url, branch)
+    cached = _sha_cache.get(cache_key)
+    if cached and (time.monotonic() - cached[1]) < CATALOG_SHA_TTL_SECONDS:
+        return cached[0]
+
+    try:
+        result = subprocess.run(
+            ["git", "ls-remote", "--", repo_url, branch],
+            capture_output=True, text=True, check=True,
+            timeout=CATALOG_LS_REMOTE_TIMEOUT_SECONDS,
+            env={**os.environ, "GIT_ALLOW_PROTOCOL": "https:ssh", "GIT_TERMINAL_PROMPT": "0"},
+        )
+    except subprocess.TimeoutExpired:
+        logger.error(red(f"ls-remote timed out for {mask_url_credentials(repo_url)}"))
+        return None
+    except subprocess.CalledProcessError as e:
+        detail = mask_url_credentials(e.stderr.strip() if e.stderr else f"{e}")
+        logger.error(red(f"ls-remote failed: {detail}"))
+        return None
+
+    if not result.stdout.strip():
+        return None
+
+    sha = result.stdout.split()[0]
+    _sha_cache[cache_key] = (sha, time.monotonic())
+    return sha
+
+
+@app.get("/catalog", dependencies=[Depends(require_service_token)])
+def get_catalog(
+    repo_url: str = Query(..., description="Templates repository to extract from."),
+    branch: str = Query("main", description="Branch to read."),
+    provider: str = Query("aws", description="Provider directory to scan."),
+    if_none_match: Optional[str] = Header(default=None),
+):
+    """Serve the wizard catalog extracted from a templates repository.
+
+    Declared with `def`, not `async def`, deliberately: this clones and walks a
+    filesystem, and FastAPI runs sync handlers in a threadpool. The neighbouring
+    /process handlers do the same blocking work on an `async def` and stall the
+    event loop for every other request while a clone runs.
+
+    The ETag is the templates commit sha, so a frontend that already holds the
+    current catalog revalidates for the cost of one ls-remote.
+    """
+    if not CATALOG_REPO_ALLOWLIST:
+        raise HTTPException(
+            status_code=503,
+            detail="Catalog extraction is not configured (CATALOG_REPO_ALLOWLIST is unset)",
+        )
+    if not repo_is_allowed(repo_url):
+        raise HTTPException(status_code=400, detail="repo_url is not in the catalog allowlist")
+
+    sha = resolve_remote_sha(repo_url, branch)
+    if not sha:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Could not resolve '{branch}' in the templates repository",
+        )
+
+    if if_none_match and if_none_match.strip('"') == sha:
+        return Response(status_code=304, headers={"ETag": f'"{sha}"'})
+
+    cache_key = (repo_url, branch, provider)
+    cached = _catalog_cache.get(cache_key)
+    if cached and cached[0] == sha:
+        return JSONResponse(content=cached[1], headers={"ETag": f'"{sha}"'})
+
+    temp_dir = Path(tempfile.mkdtemp(prefix="injecto-catalog-"))
+    try:
+        clone_path = temp_dir / "clone"
+        if not clone_repository(
+            repo_url=repo_url,
+            clone_path=str(clone_path),
+            branch=branch,
+            depth=1,
+            timeout=CATALOG_CLONE_TIMEOUT_SECONDS,
+        ):
+            raise HTTPException(status_code=502, detail="Failed to clone the templates repository")
+
+        catalog = extract_catalog(clone_path, provider)
+    finally:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+    if catalog["errors"]:
+        # 422 rather than a 200 carrying a partial document: a catalog missing
+        # the module whose decorator failed to parse looks exactly like a
+        # templates repo that never had it.
+        raise HTTPException(
+            status_code=422,
+            detail={"message": "Templates contain malformed decorators", "errors": catalog["errors"]},
+        )
+
+    catalog["commit"] = sha
+    _catalog_cache[cache_key] = (sha, catalog)
+    return JSONResponse(content=catalog, headers={"ETag": f'"{sha}"'})
