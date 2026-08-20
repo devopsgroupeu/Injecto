@@ -3,6 +3,9 @@
 import subprocess
 import os
 import re
+import hashlib
+import fcntl
+from pathlib import Path
 
 from .logs import logger, green, yellow, red
 
@@ -111,3 +114,58 @@ def clone_repository(repo_url, clone_path, branch=None, username=None, pat=None,
             )
         )
         return False
+
+
+def get_cached_templates(repo_url, branch, cache_dir=None, timeout=60):
+    """
+    Shallow-clone (or refresh) the templates repo into a persistent cache dir.
+
+    The infra-templates repo is static and small (~90 KB pack), so a full cold
+    clone per request is pure waste. The cache is keyed by repo URL + branch:
+      - first request: shallow clone (--depth 1 --single-branch) into the cache
+      - later requests: shallow fetch + hard reset to the branch tip, so every
+        request still sees the latest templates
+
+    A per-key file lock serializes concurrent refreshes (multiple uvicorn
+    workers or overlapping requests must not fetch/reset the same repo at once).
+
+    Returns:
+        Path: the cached clone directory (caller must NOT delete it).
+    """
+    cache_dir = cache_dir or os.environ.get("TEMPLATES_CACHE_DIR", "/tmp/injecto-templates-cache")
+    cache_key = hashlib.sha256(f"{repo_url}|{branch}".encode("utf-8")).hexdigest()[:16]
+    cache_path = Path(cache_dir) / cache_key
+    lock_path = Path(cache_dir) / f"{cache_key}.lock"
+
+    os.makedirs(cache_dir, exist_ok=True)
+
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            if cache_path.exists() and any(cache_path.iterdir()):
+                logger.info(f"Refreshing cached templates: {cache_path}")
+                subprocess.run(
+                    ["git", "-C", str(cache_path), "fetch", "--depth", "1", "origin", branch],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+                subprocess.run(
+                    ["git", "-C", str(cache_path), "reset", "--hard", "FETCH_HEAD"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+            else:
+                logger.info(f"Cloning templates into cache: {cache_path}")
+                success = clone_repository(
+                    repo_url, str(cache_path), branch=branch, depth=1, timeout=timeout
+                )
+                if not success:
+                    raise RuntimeError(f"Failed to clone templates repository: {repo_url}")
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+    return cache_path
