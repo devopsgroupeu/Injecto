@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import logging
+import os
 from pathlib import Path
 import yaml
 import json
@@ -15,6 +16,16 @@ from .decorators import (
     SECTION_END_RE,
     VALUE_LINE_RE,
     DECORATOR_PREFIXES,
+    strip_attr_tail,
+)
+
+# Decorator lines are copied into the generated repository, so once the
+# templates carry label/description/options the customer reads our wizard
+# metadata in their own tfvars. Off by default: enabling it changes delivered
+# output, and that should be a deliberate act rather than a side effect of an
+# upgrade.
+TRIM_DECORATOR_ATTRS = os.getenv("TRIM_DECORATOR_ATTRS", "").strip().lower() in (
+    "1", "true", "yes", "on",
 )
 
 # --- Helper Functions ---
@@ -155,6 +166,7 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
     total_files_modified = 0
     total_replacements = 0
     total_section_toggles = 0
+    total_attrs_trimmed = 0
     # Collected across every file so one run reports all offending sites, then
     # raised once the loop is done — raising inside the loop would be swallowed
     # by the per-file exception handler below.
@@ -263,6 +275,17 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
                         else:
                             logger.warning(yellow(f"  - Found @param for '{yaml_path}' but couldn't find a 'key=value' or 'key: value' pattern on the next line in {relative_path}"))
 
+            # --- Pass 3: Strip decorator attribute tails ---
+            # Sets file_was_modified: a file whose only change is a trimmed tail
+            # would otherwise take the copy path below and ship untrimmed.
+            if TRIM_DECORATOR_ATTRS:
+                for i, line in enumerate(final_lines):
+                    trimmed = strip_attr_tail(line)
+                    if trimmed != line:
+                        final_lines[i] = trimmed
+                        file_was_modified = True
+                        total_attrs_trimmed += 1
+
             # --- Write Output ---
             if file_was_modified:
                 total_files_modified += 1
@@ -282,6 +305,9 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
             failed_files.append(f"{relative_path}: {type(e).__name__}: {e}")
 
     logger.info(green(f"File processing finished. Modified {total_files_modified} files with {total_replacements} value replacements and {total_section_toggles} section line toggles."))
+
+    if TRIM_DECORATOR_ATTRS:
+        logger.info(green(f"Trimmed attribute tails from {total_attrs_trimmed} decorator line(s)."))
 
     if failed_files:
         raise GenerationError(
