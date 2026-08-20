@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0](https://github.com/devopsgroupeu/Injecto/compare/v0.7.0...v0.8.0) (2026-08-20)
+
+### 🚀 Features
+
+* **processing:** add opt-in TRIM_DECORATOR_ATTRS to keep wizard metadata out of generated output (OP-226) ([#25](https://github.com/devopsgroupeu/Injecto/issues/25)) ([22c4c9b](https://github.com/devopsgroupeu/Injecto/commit/22c4c9b509c8cc66bddd6693f749967f60c7fd12))
+
 ## [0.7.0](https://github.com/devopsgroupeu/Injecto/compare/v0.6.0...v0.7.0) (2026-08-19)
 
 ### 🚀 Features
