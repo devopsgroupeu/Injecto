@@ -137,3 +137,29 @@ def parse_section(line: str) -> Optional[tuple]:
     if end:
         return end.group(1), 'end'
     return None
+
+
+def strip_attr_tail(line: str) -> str:
+    """Remove a decorator's ``| key=value`` tail, leaving the rest of the line.
+
+    The decorator lines are copied verbatim into the generated repository, so
+    after the templates are enriched every customer would read our wizard
+    metadata in their own tfvars. This removes the tail and nothing else.
+
+    The line itself is deliberately kept. ``tests/gate.py`` locates each value
+    in the generated tree by the line number it scanned from the template, so
+    deleting decorator lines would shift every line after them. Keeping
+    ``# @param <path>`` also documents which wizard field drives the value.
+
+    Only a tail introduced by ``|`` is removed; anything else after the path is
+    not attribute syntax and is left alone rather than silently discarded.
+    """
+    for regex in (PARAM_RE, MODULE_RE):
+        match = regex.search(line)
+        if not match:
+            continue
+        tail = line[match.end():]
+        if not tail.lstrip().startswith('|'):
+            return line
+        return line[:match.end()] + ('\n' if line.endswith('\n') else '')
+    return line
