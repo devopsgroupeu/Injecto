@@ -108,3 +108,62 @@ def test_a_timeout_is_reported_rather_than_raised(monkeypatch, tmp_path, caplog)
         assert not clone_repository('https://host/x.git', str(tmp_path / 'c'), timeout=30)
 
     assert 'Timed out' in caplog.text
+
+
+# --- Cached templates clone (shallow clone + per-key refresh) ---------------
+
+import hashlib
+import os
+
+from injecto.git import get_cached_templates
+
+
+def test_get_cached_templates_clones_into_cache_on_first_use(monkeypatch, tmp_path):
+    """First request shallow-clones the templates repo into the cache dir."""
+    repo_url = "https://github.com/org/templates.git"
+    branch = "main"
+
+    seen = []
+
+    def fake_run(command, **kwargs):
+        # Simulate git clone actually creating the target directory.
+        if command[:2] == ["git", "clone"]:
+            os.makedirs(command[-1], exist_ok=True)
+        seen.append(command)
+        return _FakeCompleted()
+
+    monkeypatch.setattr(subprocess, 'run', fake_run)
+    cache_path = get_cached_templates(repo_url, branch, cache_dir=str(tmp_path))
+
+    assert cache_path.exists()
+    # First call is the initial shallow clone
+    clone_command = seen[0]
+    assert clone_command[:2] == ["git", "clone"]
+    assert "--depth" in clone_command
+    assert str(cache_path) in clone_command
+
+
+def test_get_cached_templates_refreshes_existing_cache(monkeypatch, tmp_path):
+    """Later requests refresh the cached clone with a shallow fetch + reset."""
+    repo_url = "https://github.com/org/templates.git"
+    branch = "main"
+    cache_key = hashlib.sha256(f"{repo_url}|{branch}".encode("utf-8")).hexdigest()[:16]
+    cache_path = tmp_path / cache_key
+    cache_path.mkdir()
+    (cache_path / "README.md").write_text("templates")
+
+    seen = []
+
+    def fake_run(command, **kwargs):
+        seen.append(command)
+        return _FakeCompleted()
+
+    monkeypatch.setattr(subprocess, 'run', fake_run)
+    result = get_cached_templates(repo_url, branch, cache_dir=str(tmp_path))
+
+    assert result == cache_path
+    assert seen[0][:4] == ["git", "-C", str(cache_path), "fetch"]
+    assert "--depth" in seen[0]
+    assert seen[1][:4] == ["git", "-C", str(cache_path), "reset"]
+    # No full clone on cache hits
+    assert all(cmd[0] != "git" or cmd[1] != "clone" for cmd in seen)

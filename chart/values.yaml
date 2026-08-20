@@ -175,7 +175,12 @@ tolerations: []
 affinity: {}
 
 # Environment variables
-env: []
+env:
+  # Persistent cache for the shallow-cloned infra-templates repo.
+  # /tmp is an emptyDir mount in this chart (writable despite
+  # readOnlyRootFilesystem) — ephemeral per pod, shared across requests.
+  - name: TEMPLATES_CACHE_DIR
+    value: "/tmp/injecto-templates-cache"
   # - name: LOG_LEVEL
   #   value: "info"
   # - name: DEBUG
