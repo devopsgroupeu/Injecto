@@ -32,6 +32,7 @@ bug this whole epic exists to remove.
 ``valueType``   What the value *is*: string, number, boolean, list, map
 ``defaultValue``Value the templates ship
 ``options``     Choices for a dropdown
+``available``   ``false`` on a @module hides the service from the wizard
 ==============  ===========================================================
 
 ``type`` and ``valueType`` are genuinely two things: ``allowExplicitIndex`` is a
@@ -329,6 +330,15 @@ def _ensure_service(catalog, service_key, module_attrs, sections, collector, whe
         'fields': enabled,
     }
     service.update({k: v for k, v in attrs.items() if k != 'displayName'})
+
+    # A module can exist in the templates and still not be offerable: lambda.tf
+    # generates fine but needs deployment packages the wizard cannot supply, so
+    # a plain apply fails. The wizard tests `available !== false`, and every
+    # other attribute arrives from parse_attrs as a string -- 'false' would pass
+    # that test and offer the service anyway.
+    if 'available' in attrs:
+        service['available'] = str(attrs['available']).strip().lower() == 'true'
+
     catalog['services'][service_key] = service
     return service
 

@@ -546,3 +546,30 @@ def test_extract_catalog_is_reachable_as_a_module(tmp_path):
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)['schemaVersion'] == SCHEMA_VERSION
+
+
+def test_module_available_false_is_a_boolean_not_the_string(tmp_path):
+    """The wizard hides a service with ``available !== false``.
+
+    parse_attrs returns every value but ``options`` as a string, and the string
+    'false' passes that test -- the service would stay on offer with the
+    decorator sitting in the template looking like it worked. lambda.tf is the
+    live case: it generates fine but needs deployment packages the wizard
+    cannot supply, so a plain apply fails (OpenPrime-151).
+    """
+    tfvars = (
+        '# @module services.eks | displayName=Kubernetes | available=false\n'
+        + MINIMAL_TFVARS
+    )
+    catalog = extract_catalog(build_templates(tmp_path, tfvars))
+
+    assert catalog['services']['eks']['available'] is False
+
+
+def test_a_module_says_nothing_about_availability_by_default(tmp_path):
+    """Absent means offerable. Emitting available=True on every service would
+    make the flag look deliberate everywhere and meaningless nowhere."""
+    tfvars = '# @module services.eks | displayName=Kubernetes\n' + MINIMAL_TFVARS
+    catalog = extract_catalog(build_templates(tmp_path, tfvars))
+
+    assert 'available' not in catalog['services']['eks']
