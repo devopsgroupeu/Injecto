@@ -14,7 +14,7 @@ environment = "development"
 # genuinely renamed leaf carried by catalog/legacy-paths.txt.
 # -------------------------------------------------------------------
 
-# @module services.vpc | label=Network
+# @module services.vpc | displayName=Network
 # @param services.vpc.cidr
 vpc_cidr = "10.0.0.0/16"
 # @param services.vpc.azCount
@@ -31,7 +31,7 @@ public_subnet_tags = {}
 # for a literal that cannot be inferred.
 # -------------------------------------------------------------------
 
-# @module services.rds | label=Relational database
+# @module services.rds | displayName=Relational database
 # @param services.rds.engine
 rds_engine = "postgres"
 # @param services.rds.engineVersion
@@ -42,5 +42,5 @@ rds_instance_class = "db.t3.micro"
 rds_allocated_storage = 20
 # @param services.rds.multiAz
 rds_multi_az = true
-# @param services.rds.parameters | type=list
+# @param services.rds.parameters | valueType=list
 rds_parameters = []

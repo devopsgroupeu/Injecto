@@ -1,142 +1,161 @@
 {
   "global": {
     "fields": {
-      "globalPrefix": {
-        "defaultValue": "my-project",
-        "line": 7,
-        "path": "globalPrefix",
-        "tfVar": "global_prefix",
-        "type": "string"
-      },
-      "name": {
-        "defaultValue": "development",
-        "line": 9,
-        "path": "name",
-        "tfVar": "environment",
-        "type": "string"
-      },
       "region": {
-        "defaultValue": "eu-west-1",
-        "line": 5,
+        "name": "region",
         "path": "region",
         "tfVar": "region",
-        "type": "string"
+        "valueType": "string",
+        "defaultValue": "eu-west-1",
+        "line": 5
+      },
+      "globalPrefix": {
+        "name": "globalPrefix",
+        "path": "globalPrefix",
+        "tfVar": "global_prefix",
+        "valueType": "string",
+        "defaultValue": "my-project",
+        "line": 7
+      },
+      "name": {
+        "name": "name",
+        "path": "name",
+        "tfVar": "environment",
+        "valueType": "string",
+        "defaultValue": "development",
+        "line": 9
       }
     }
   },
   "provider": "aws",
   "schemaVersion": 1,
   "services": {
-    "rds": {
+    "vpc": {
+      "key": "vpc",
+      "displayName": "Network",
       "fields": {
-        "allocatedStorage": {
-          "defaultValue": 20,
-          "line": 41,
-          "path": "services.rds.allocatedStorage",
-          "tfVar": "rds_allocated_storage",
-          "type": "number"
-        },
         "enabled": {
-          "defaultValue": false,
-          "label": "Enabled",
-          "line": 7,
-          "path": "services.rds.enabled",
-          "sectionGated": true,
+          "name": "enabled",
+          "path": "services.vpc.enabled",
           "tfVar": null,
-          "type": "boolean"
+          "valueType": "boolean",
+          "type": "toggle",
+          "defaultValue": false,
+          "displayName": "Enabled",
+          "sectionGated": true,
+          "line": 1
+        },
+        "cidr": {
+          "name": "cidr",
+          "path": "services.vpc.cidr",
+          "tfVar": "vpc_cidr",
+          "valueType": "string",
+          "defaultValue": "10.0.0.0/16",
+          "line": 18
+        },
+        "azCount": {
+          "name": "azCount",
+          "path": "services.vpc.azCount",
+          "tfVar": "az_count",
+          "valueType": "number",
+          "defaultValue": 2,
+          "line": 20
+        },
+        "createPublicSubnets": {
+          "name": "createPublicSubnets",
+          "path": "services.vpc.createPublicSubnets",
+          "tfVar": "create_public_subnets",
+          "valueType": "boolean",
+          "defaultValue": true,
+          "line": 22
+        },
+        "natGateway": {
+          "name": "natGateway",
+          "path": "services.vpc.natGateway",
+          "tfVar": "nat_gateway_strategy",
+          "valueType": "string",
+          "defaultValue": "SINGLE",
+          "line": 24
+        },
+        "publicSubnetTags": {
+          "name": "publicSubnetTags",
+          "path": "services.vpc.publicSubnetTags",
+          "tfVar": "public_subnet_tags",
+          "valueType": "object",
+          "defaultValue": "{}",
+          "line": 26
+        }
+      }
+    },
+    "rds": {
+      "key": "rds",
+      "displayName": "Relational database",
+      "fields": {
+        "enabled": {
+          "name": "enabled",
+          "path": "services.rds.enabled",
+          "tfVar": null,
+          "valueType": "boolean",
+          "type": "toggle",
+          "defaultValue": false,
+          "displayName": "Enabled",
+          "sectionGated": true,
+          "line": 7
         },
         "engine": {
-          "defaultValue": "postgres",
-          "line": 35,
+          "name": "engine",
           "path": "services.rds.engine",
           "tfVar": "rds_engine",
-          "type": "string"
+          "valueType": "string",
+          "defaultValue": "postgres",
+          "line": 35
         },
         "engineVersion": {
-          "defaultValue": "15",
-          "line": 37,
+          "name": "engineVersion",
           "path": "services.rds.engineVersion",
           "tfVar": "rds_engine_version",
-          "type": "string"
+          "valueType": "string",
+          "defaultValue": "15",
+          "line": 37
         },
         "instanceClass": {
-          "defaultValue": "\"db.t3.micro\"",
+          "name": "instanceClass",
+          "path": "services.rds.instanceClass",
+          "tfVar": "rds_instance_class",
+          "valueType": "string",
+          "defaultValue": "db.t3.micro",
           "line": 39,
+          "type": "dropdown",
           "options": [
             "db.t3.micro",
             "db.t3.small"
-          ],
-          "path": "services.rds.instanceClass",
-          "tfVar": "rds_instance_class",
-          "type": "dropdown"
+          ]
+        },
+        "allocatedStorage": {
+          "name": "allocatedStorage",
+          "path": "services.rds.allocatedStorage",
+          "tfVar": "rds_allocated_storage",
+          "valueType": "number",
+          "defaultValue": 20,
+          "line": 41
         },
         "multiAz": {
-          "defaultValue": true,
-          "line": 43,
+          "name": "multiAz",
           "path": "services.rds.multiAz",
           "tfVar": "rds_multi_az",
-          "type": "boolean"
+          "valueType": "boolean",
+          "defaultValue": true,
+          "line": 43
         },
         "parameters": {
-          "defaultValue": "[]",
-          "line": 45,
+          "name": "parameters",
           "path": "services.rds.parameters",
           "tfVar": "rds_parameters",
-          "type": "list"
+          "valueType": "list",
+          "defaultValue": "[]",
+          "line": 45
         }
-      },
-      "key": "rds",
-      "label": "Relational database"
-    },
-    "vpc": {
-      "fields": {
-        "azCount": {
-          "defaultValue": 2,
-          "line": 20,
-          "path": "services.vpc.azCount",
-          "tfVar": "az_count",
-          "type": "number"
-        },
-        "cidr": {
-          "defaultValue": "10.0.0.0/16",
-          "line": 18,
-          "path": "services.vpc.cidr",
-          "tfVar": "vpc_cidr",
-          "type": "string"
-        },
-        "createPublicSubnets": {
-          "defaultValue": true,
-          "line": 22,
-          "path": "services.vpc.createPublicSubnets",
-          "tfVar": "create_public_subnets",
-          "type": "boolean"
-        },
-        "enabled": {
-          "defaultValue": false,
-          "label": "Enabled",
-          "line": 1,
-          "path": "services.vpc.enabled",
-          "sectionGated": true,
-          "tfVar": null,
-          "type": "boolean"
-        },
-        "natGateway": {
-          "defaultValue": "SINGLE",
-          "line": 24,
-          "path": "services.vpc.natGateway",
-          "tfVar": "nat_gateway_strategy",
-          "type": "string"
-        },
-        "publicSubnetTags": {
-          "defaultValue": "{}",
-          "line": 26,
-          "path": "services.vpc.publicSubnetTags",
-          "tfVar": "public_subnet_tags",
-          "type": "object"
-        }
-      },
-      "key": "vpc",
-      "label": "Network"
+      }
     }
   }
 }

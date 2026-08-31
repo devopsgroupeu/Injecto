@@ -51,7 +51,7 @@ def test_enriched_param_tail_substitutes_identically_to_bare_param(tmp_path):
     bare = '# @param services.eks.kubernetesVersion\ncluster_version = "1.29"\n'
     enriched = (
         "# @param services.eks.kubernetesVersion | type=dropdown"
-        " | label=Kubernetes version | options=[1.31,1.32]\n"
+        " | displayName=Kubernetes version | options=[1.31,1.32]\n"
         'cluster_version = "1.29"\n'
     )
 
@@ -69,9 +69,9 @@ def test_enriched_param_tail_substitutes_identically_to_bare_param(tmp_path):
     "tail",
     [
         " | type=dropdown",
-        " | label=Some human label",
+        " | displayName=Some human label",
         " | options=[a,b,c] | default=a",
-        "|type=number|min=1|max=10",
+        "|valueType=number|min=1|max=10",
     ],
 )
 def test_param_path_parsing_stops_at_the_enrichment_tail(tmp_path, tail):

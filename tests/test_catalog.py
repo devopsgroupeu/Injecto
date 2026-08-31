@@ -72,9 +72,9 @@ def test_bare_decorator_has_no_attrs():
 
 
 def test_attrs_are_pipe_delimited_key_values():
-    path, attrs = parse_param('# @param services.eks.size | type=dropdown | label=Node size')
+    path, attrs = parse_param('# @param services.eks.size | type=dropdown | displayName=Node size')
     assert path == 'services.eks.size'
-    assert attrs == {'type': 'dropdown', 'label': 'Node size'}
+    assert attrs == {'type': 'dropdown', 'displayName': 'Node size'}
 
 
 def test_options_is_decoded_as_json():
@@ -91,8 +91,8 @@ def test_path_stops_at_the_attribute_tail():
 
 
 def test_module_decorator_parses_like_param():
-    assert parse_module('# @module services.eks | label=Kubernetes') == (
-        'services.eks', {'label': 'Kubernetes'},
+    assert parse_module('# @module services.eks | displayName=Kubernetes') == (
+        'services.eks', {'displayName': 'Kubernetes'},
     )
 
 
@@ -101,7 +101,7 @@ def test_module_decorator_parses_like_param():
     ('| dropdown', 'is not key=value'),
     ('| type=a | type=b', 'duplicate attribute'),
     ('| options=[not json]', 'must be valid JSON'),
-    ('| type=a || label=b', 'empty attribute segment'),
+    ('| type=a || displayName=b', 'empty attribute segment'),
 ])
 def test_malformed_attrs_raise(tail, fragment):
     with pytest.raises(DecoratorError) as excinfo:
@@ -175,7 +175,7 @@ def test_minimal_tree_extracts_cleanly(tmp_path):
 
     field = catalog['services']['eks']['fields']['kubernetesVersion']
     assert field['tfVar'] == 'eks_kubernetes_version'
-    assert field['type'] == 'string'
+    assert field['valueType'] == 'string'
     assert field['defaultValue'] == '1.33'
 
 
@@ -191,10 +191,10 @@ def test_enabled_is_synthesized_first(tmp_path):
 
 
 def test_module_decorator_enriches_the_service(tmp_path):
-    tfvars = '# @module services.eks | label=Kubernetes | icon=k8s\n' + MINIMAL_TFVARS
+    tfvars = '# @module services.eks | displayName=Kubernetes | icon=k8s\n' + MINIMAL_TFVARS
     catalog = extract_catalog(build_templates(tmp_path, tfvars))
 
-    assert catalog['services']['eks']['label'] == 'Kubernetes'
+    assert catalog['services']['eks']['displayName'] == 'Kubernetes'
     assert catalog['services']['eks']['icon'] == 'k8s'
 
 
@@ -202,7 +202,7 @@ def test_service_without_a_module_decorator_falls_back_to_its_key(tmp_path):
     """Extraction must work before OP-206 decorates anything, or the catalog is
     useless until every module is annotated."""
     catalog = extract_catalog(build_templates(tmp_path, MINIMAL_TFVARS))
-    assert catalog['services']['eks']['label'] == 'eks'
+    assert catalog['services']['eks']['displayName'] == 'eks'
 
 
 # --- Strict-mode error cases ------------------------------------------------
@@ -213,11 +213,11 @@ def test_unknown_type_is_an_error(tmp_path):
 
 
 def test_declared_type_overrides_refusal(tmp_path):
-    tfvars = '# @param services.eks.tags | type=list\neks_tags = []\n'
+    tfvars = '# @param services.eks.tags | valueType=list\neks_tags = []\n'
     catalog = extract_catalog(build_templates(tmp_path, tfvars))
 
     assert catalog['errors'] == []
-    assert catalog['services']['eks']['fields']['tags']['type'] == 'list'
+    assert catalog['services']['eks']['fields']['tags']['valueType'] == 'list'
 
 
 def test_invalid_options_json_is_an_error(tmp_path):
@@ -363,12 +363,12 @@ def test_module_decorator_leaves_generated_output_untouched(tmp_path):
     build_templates(source, MINIMAL_TFVARS)
     process_files(source / 'templates' / 'terraform' / 'aws', tmp_path / 'without', {})
 
-    build_templates(source, '# @module services.eks | label=Kubernetes\n' + MINIMAL_TFVARS)
+    build_templates(source, '# @module services.eks | displayName=Kubernetes\n' + MINIMAL_TFVARS)
     process_files(source / 'templates' / 'terraform' / 'aws', tmp_path / 'with', {})
 
     without = (tmp_path / 'without' / 'terraform.auto.tfvars').read_text()
     with_module = (tmp_path / 'with' / 'terraform.auto.tfvars').read_text()
-    assert with_module == '# @module services.eks | label=Kubernetes\n' + without
+    assert with_module == '# @module services.eks | displayName=Kubernetes\n' + without
 
 
 def test_module_inside_a_disabled_section_is_not_uncommented(tmp_path):
@@ -377,7 +377,7 @@ def test_module_inside_a_disabled_section_is_not_uncommented(tmp_path):
     source = tmp_path / 'src'
     tf = (
         '# @section services.eks.enabled begin\n'
-        '# @module services.eks | label=Kubernetes\n'
+        '# @module services.eks | displayName=Kubernetes\n'
         '# module "eks" {}\n'
         '# @section services.eks.enabled end\n'
     )
@@ -389,7 +389,7 @@ def test_module_inside_a_disabled_section_is_not_uncommented(tmp_path):
     )
 
     rendered = (tmp_path / 'out' / 'main.tf').read_text()
-    assert '# @module services.eks | label=Kubernetes' in rendered
+    assert '# @module services.eks | displayName=Kubernetes' in rendered
     assert 'module "eks" {}' in rendered
 
 

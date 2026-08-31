@@ -12,11 +12,32 @@ its default, which is the only place both the value and its Terraform variable
 name appear together.
 
 Extraction never guesses. Where a literal cannot yield an unambiguous type
-(``null``, ``[]``) the decorator must declare ``| type=...``; where a path leaf
-does not follow one of the two naming conventions in use, the path must be
+(``null``, ``[]``) the decorator must declare ``| valueType=...``; where a path
+leaf does not follow one of the two naming conventions in use, the path must be
 listed in the repo's ``catalog/legacy-paths.txt``. Both surface as errors that
 fail ``--extract-catalog --strict`` rather than as a catalog that quietly
 advertises a field the generator will not fill.
+
+Vocabulary
+----------
+One word per concept, and the same word the frontend already uses -- so the
+catalog drops into ``SERVICES_CONFIG`` with no translation layer. A mapping
+layer is a place for the two vocabularies to drift apart, which is the class of
+bug this whole epic exists to remove.
+
+==============  ===========================================================
+``name``        Field key, emitted on the field as well as being its map key
+``displayName`` Human label, on both fields and services
+``type``        The control that edits the value: text, dropdown, toggle
+``valueType``   What the value *is*: string, number, boolean, list, map
+``defaultValue``Value the templates ship
+``options``     Choices for a dropdown
+==============  ===========================================================
+
+``type`` and ``valueType`` are genuinely two things: ``allowExplicitIndex`` is a
+Terraform ``string`` edited by a toggle. They shared one word until the frontend
+needed both, and one word for two concepts is how a dropdown ends up rendering a
+boolean.
 """
 
 import argparse
@@ -177,11 +198,13 @@ def _synthesize_enabled(service_key: str, sections: dict, collector: _Collector)
 
     return {
         'enabled': {
+            'name': 'enabled',
             'path': dotted,
             'tfVar': None,
-            'type': 'boolean',
+            'valueType': 'boolean',
+            'type': 'toggle',
             'defaultValue': False,
-            'label': 'Enabled',
+            'displayName': 'Enabled',
             'sectionGated': True,
             'file': str(source[0]),
             'line': source[1],
@@ -213,10 +236,10 @@ def _ensure_service(catalog, service_key, module_attrs, sections, collector, whe
     attrs = module_attrs.get(service_key, {})
     service = {
         'key': service_key,
-        'label': attrs.get('label', service_key),
+        'displayName': attrs.get('displayName', service_key),
         'fields': enabled,
     }
-    service.update({k: v for k, v in attrs.items() if k != 'label'})
+    service.update({k: v for k, v in attrs.items() if k != 'displayName'})
     catalog['services'][service_key] = service
     return service
 
@@ -338,27 +361,35 @@ def extract_catalog(repo_root, provider: str = 'aws') -> dict:
                 )
                 continue
 
-        declared_type = attrs.get('type')
+        # `valueType` is what the value *is* (string, number, list); `type` is the
+        # control that edits it (text, dropdown, toggle). They were one word until
+        # the frontend needed both, and one word for two concepts is how a
+        # dropdown ends up rendering a boolean.
+        declared_type = attrs.get('valueType')
         if declared_type:
-            field_type = declared_type
+            value_type = declared_type
             default_value = attrs.get('default', literal)
         else:
             try:
-                field_type, default_value = infer_type(literal)
+                value_type, default_value = infer_type(literal)
             except DecoratorError as exc:
                 collector.error('UNKNOWN_TYPE', f"'{path}': {exc}", file=where, line=number + 1)
                 continue
 
         field = {
+            # The frontend reads `name` off the field itself, not off the key it
+            # is stored under, so emit both rather than making every consumer
+            # thread the key through.
+            'name': segments[2] if not is_global else path,
             'path': path,
             'tfVar': tf_var,
-            'type': field_type,
+            'valueType': value_type,
             'defaultValue': default_value,
             'file': where,
             'line': number,
         }
         for key, value in attrs.items():
-            if key not in ('type', 'default', 'exclude'):
+            if key not in ('valueType', 'default', 'exclude'):
                 field[key] = value
 
         if is_global:
