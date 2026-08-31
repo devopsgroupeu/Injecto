@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.1](https://github.com/devopsgroupeu/Injecto/compare/v0.9.0...v0.9.1) (2026-08-31)
+
+### 🐛 Bug Fixes
+
+* **catalog:** emit nested section toggles and parse structured defaults ([7e1de51](https://github.com/devopsgroupeu/Injecto/commit/7e1de51a755727dfca6e27a04cfac6488642cbd0))
+
 ## [0.9.0](https://github.com/devopsgroupeu/Injecto/compare/v0.8.0...v0.9.0) (2026-08-31)
 
 ### 🚀 Features
