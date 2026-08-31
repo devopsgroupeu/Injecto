@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0](https://github.com/devopsgroupeu/Injecto/compare/v0.9.1...v0.10.0) (2026-08-31)
+
+### 🚀 Features
+
+* **catalog:** let section markers declare a label and a default ([7e969a4](https://github.com/devopsgroupeu/Injecto/commit/7e969a481baa52ed97db7ef7d68fc9b6bcd2e897))
+
+### 🐛 Bug Fixes
+
+* **catalog:** coerce module available to a boolean the wizard can act on ([37488b2](https://github.com/devopsgroupeu/Injecto/commit/37488b21a70d4ff14fccd9b43a45aa931e5531f1))
+
 ## [0.9.1](https://github.com/devopsgroupeu/Injecto/compare/v0.9.0...v0.9.1) (2026-08-31)
 
 ### 🐛 Bug Fixes
