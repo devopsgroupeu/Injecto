@@ -32,6 +32,7 @@ bug this whole epic exists to remove.
 ``valueType``   What the value *is*: string, number, boolean, list, map
 ``defaultValue``Value the templates ship
 ``options``     Choices for a dropdown
+``available``   ``false`` on a @module hides the service from the wizard
 ==============  ===========================================================
 
 ``type`` and ``valueType`` are genuinely two things: ``allowExplicitIndex`` is a
@@ -48,6 +49,7 @@ from pathlib import Path
 
 from .decorators import (
     DecoratorError,
+    parse_attrs,
     parse_module,
     parse_param,
     parse_section,
@@ -181,7 +183,17 @@ class _Collector:
 
 
 def _collect_sections(provider_dir: Path) -> dict:
-    """Map every ``@section`` path to the file:line of its begin marker."""
+    """Map every ``@section`` path to its begin marker and any attributes.
+
+    A section carries no value of its own, so a toggle synthesised from one has
+    nothing to take a label or a default from. Both then have to be invented,
+    and an invented default is worse than none: the wizard enables Karpenter by
+    default, and a catalog that guessed ``false`` would have turned it off for
+    everyone without anything failing.
+
+    So a begin marker may carry the same ``| key=value`` tail as @param and
+    @module. It goes after ``begin`` because the marker's own regex ends there.
+    """
     sections = {}
     for path in sorted(provider_dir.rglob('*')):
         if not path.is_file():
@@ -193,7 +205,14 @@ def _collect_sections(provider_dir: Path) -> dict:
         for number, line in enumerate(lines, start=1):
             parsed = parse_section(line)
             if parsed and parsed[1] == 'begin':
-                sections.setdefault(parsed[0], (path, number))
+                attrs = {}
+                _, _, tail = line.partition('begin')
+                if '|' in tail:
+                    try:
+                        attrs = parse_attrs(tail)
+                    except DecoratorError as exc:
+                        raise DecoratorError(f"@section {parsed[0]}: {exc}") from exc
+                sections.setdefault(parsed[0], (path, number, attrs))
     return sections
 
 
@@ -226,6 +245,9 @@ def _synthesize_enabled(service_key: str, sections: dict, collector: _Collector)
             'valueType': 'boolean',
             'type': 'toggle',
             'defaultValue': False,
+            # Overwritten by _ensure_service once the module's own displayName is
+            # known: "Enable RDS" is what the wizard shows today, and a generic
+            # "Enabled" reads as a different product in a list of service cards.
             'displayName': 'Enabled',
             'sectionGated': True,
             'file': str(source[0]),
@@ -257,14 +279,15 @@ def _synthesize_section_toggles(service_key: str, sections: dict) -> dict:
         leaf = dotted[len(prefix):]
         if '.' in leaf:
             continue
+        attrs = source[2] if len(source) > 2 else {}
         toggles[leaf] = {
             'name': leaf,
             'path': dotted,
             'tfVar': None,
             'valueType': 'boolean',
             'type': 'toggle',
-            'defaultValue': False,
-            'displayName': leaf,
+            'defaultValue': str(attrs.get('default', 'false')).strip().lower() == 'true',
+            'displayName': attrs.get('displayName', leaf),
             'sectionGated': True,
             'file': str(source[0]),
             'line': source[1],
@@ -296,12 +319,26 @@ def _ensure_service(catalog, service_key, module_attrs, sections, collector, whe
         return None
 
     attrs = module_attrs.get(service_key, {})
+    display = attrs.get('displayName', service_key)
+    if 'enabled' in enabled:
+        # "Enable RDS", not "Enabled": the toggle is read in a list of service
+        # cards where a generic label says nothing about which card it is on.
+        enabled['enabled']['displayName'] = f"Enable {display}"
     service = {
         'key': service_key,
-        'displayName': attrs.get('displayName', service_key),
+        'displayName': display,
         'fields': enabled,
     }
     service.update({k: v for k, v in attrs.items() if k != 'displayName'})
+
+    # A module can exist in the templates and still not be offerable: lambda.tf
+    # generates fine but needs deployment packages the wizard cannot supply, so
+    # a plain apply fails. The wizard tests `available !== false`, and every
+    # other attribute arrives from parse_attrs as a string -- 'false' would pass
+    # that test and offer the service anyway.
+    if 'available' in attrs:
+        service['available'] = str(attrs['available']).strip().lower() == 'true'
+
     catalog['services'][service_key] = service
     return service
 

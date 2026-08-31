@@ -41,7 +41,7 @@
           "valueType": "boolean",
           "type": "toggle",
           "defaultValue": false,
-          "displayName": "Enabled",
+          "displayName": "Enable Network",
           "sectionGated": true,
           "line": 1
         },
@@ -98,7 +98,7 @@
           "valueType": "boolean",
           "type": "toggle",
           "defaultValue": false,
-          "displayName": "Enabled",
+          "displayName": "Enable Relational database",
           "sectionGated": true,
           "line": 7
         },
