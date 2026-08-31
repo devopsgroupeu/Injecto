@@ -193,6 +193,48 @@ def test_helm_chart_sections_are_left_to_helm_charts_config(tmp_path):
     assert not [k for k in fields if 'certManager' in k or 'helmCharts' in k]
 
 
+def test_section_toggle_takes_its_label_and_default_from_the_marker(tmp_path):
+    """A section has no value, so a toggle built from one must be told.
+
+    The wizard enables Karpenter by default. A catalog that assumed ``false``
+    would have switched it off for every environment with nothing failing --
+    which is why the default is declared rather than invented.
+    """
+    tfvars = (
+        '# @module services.eks | displayName=Kubernetes\n'
+        + MINIMAL_TFVARS
+        + '# @section services.eks.karpenterEnabled begin | displayName=Enable Karpenter | default=true\n'
+        + 'karpenter_enabled = true\n'
+        + '# @section services.eks.karpenterEnabled end\n'
+    )
+    catalog = extract_catalog(build_templates(tmp_path, tfvars))
+    toggle = catalog['services']['eks']['fields']['karpenterEnabled']
+
+    assert toggle['displayName'] == 'Enable Karpenter'
+    assert toggle['defaultValue'] is True
+
+
+def test_section_toggle_without_a_marker_tail_defaults_off(tmp_path):
+    tfvars = (
+        '# @module services.eks | displayName=Kubernetes\n'
+        + MINIMAL_TFVARS
+        + '# @section services.eks.networkPolicyEnabled begin\n'
+        + 'network_policy = true\n'
+        + '# @section services.eks.networkPolicyEnabled end\n'
+    )
+    catalog = extract_catalog(build_templates(tmp_path, tfvars))
+    toggle = catalog['services']['eks']['fields']['networkPolicyEnabled']
+
+    assert toggle['defaultValue'] is False
+    assert toggle['displayName'] == 'networkPolicyEnabled'
+
+
+def test_the_service_toggle_is_labelled_after_the_service(tmp_path):
+    tfvars = '# @module services.eks | displayName=Kubernetes\n' + MINIMAL_TFVARS
+    catalog = extract_catalog(build_templates(tmp_path, tfvars))
+    assert catalog['services']['eks']['fields']['enabled']['displayName'] == 'Enable Kubernetes'
+
+
 # --- Naming conventions -----------------------------------------------------
 
 @pytest.mark.parametrize('path, tf_var', [
