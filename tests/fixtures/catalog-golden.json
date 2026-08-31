@@ -82,7 +82,7 @@
           "path": "services.vpc.publicSubnetTags",
           "tfVar": "public_subnet_tags",
           "valueType": "object",
-          "defaultValue": "{}",
+          "defaultValue": {},
           "line": 26
         }
       }
@@ -152,7 +152,7 @@
           "path": "services.rds.parameters",
           "tfVar": "rds_parameters",
           "valueType": "list",
-          "defaultValue": "[]",
+          "defaultValue": [],
           "line": 45
         }
       }
