@@ -125,8 +125,10 @@ def test_malformed_attrs_on_a_param_raise_rather_than_drop_the_field():
     ('2', ('number', 2)),
     ('-1.5', ('number', -1.5)),
     ('"eu-west-1"', ('string', 'eu-west-1')),
-    ('["t4g.large"]', ('list', '["t4g.large"]')),
-    ('{ one = {} }', ('object', '{ one = {} }')),
+    # Structured literals come back as values, not as their own source text:
+    # an array control handed the string "[]" opens on a typo.
+    ('["t4g.large"]', ('list', ['t4g.large'])),
+    ('[1, 2]', ('list', [1, 2])),
 ])
 def test_unambiguous_literals_infer(literal, expected):
     assert infer_type(literal) == expected
@@ -136,11 +138,59 @@ def test_unambiguous_literals_infer(literal, expected):
     ('null', 'literal is null'),
     ('[]', 'empty list reveals no element type'),
     ('"true"', 'quoted boolean'),
+    # An HCL map is not JSON. Rewriting one into the other with a regex would be
+    # a second, wronger parser, so the decorator declares the default instead.
+    ('{ one = {} }', 'HCL maps are not JSON'),
 ])
 def test_ambiguous_literals_refuse(literal, fragment):
     with pytest.raises(DecoratorError) as excinfo:
         infer_type(literal)
     assert fragment in str(excinfo.value)
+
+
+def test_nested_sections_become_toggles(tmp_path):
+    """A @section under a service is a switch the wizard has to be able to show.
+
+    services.eks.karpenterEnabled gates an entire node provisioner. Before this,
+    the catalog carried no field for it, so a wizard hydrated from the catalog
+    would have dropped the toggle without anything failing.
+    """
+    tfvars = (
+        '# @module services.eks | displayName=Kubernetes\n'
+        + MINIMAL_TFVARS
+        + '# @section services.eks.karpenterEnabled begin\n'
+        + 'karpenter_enabled = true\n'
+        + '# @section services.eks.karpenterEnabled end\n'
+    )
+    catalog = extract_catalog(build_templates(tmp_path, tfvars))
+    fields = catalog['services']['eks']['fields']
+
+    assert 'karpenterEnabled' in fields
+    toggle = fields['karpenterEnabled']
+    assert toggle['type'] == 'toggle'
+    assert toggle['valueType'] == 'boolean'
+    assert toggle['defaultValue'] is False
+    assert toggle['sectionGated'] is True
+
+
+def test_helm_chart_sections_are_left_to_helm_charts_config(tmp_path):
+    """Only direct children become toggles.
+
+    services.eks.helmCharts.certManager.enabled sits a level deeper and belongs
+    to helmChartsConfig (OP-200), not to the service catalog. Pulling it in here
+    would put the same switch in two places.
+    """
+    tfvars = (
+        '# @module services.eks | displayName=Kubernetes\n'
+        + MINIMAL_TFVARS
+        + '# @section services.eks.helmCharts.certManager.enabled begin\n'
+        + 'cert_manager = true\n'
+        + '# @section services.eks.helmCharts.certManager.enabled end\n'
+    )
+    catalog = extract_catalog(build_templates(tmp_path, tfvars))
+    fields = catalog['services']['eks']['fields']
+
+    assert not [k for k in fields if 'certManager' in k or 'helmCharts' in k]
 
 
 # --- Naming conventions -----------------------------------------------------

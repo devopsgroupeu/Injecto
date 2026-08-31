@@ -103,11 +103,33 @@ def infer_type(literal: str):
         except json.JSONDecodeError:
             return 'string', literal.strip('"')
     if literal.startswith('['):
-        return 'list', literal
+        return 'list', parse_structured_literal(literal)
     if literal.startswith('{'):
-        return 'object', literal
+        return 'object', parse_structured_literal(literal)
 
     raise DecoratorError(f"cannot infer a type from {literal!r}; declare | type=...")
+
+
+def parse_structured_literal(literal: str):
+    """Turn a list or map literal into a real value.
+
+    The wizard renders arrays and objects with controls that expect an array or
+    an object. Handing them the source text means an array editor opens on the
+    string ``"[]"`` -- it looks like a value and edits like a typo.
+
+    HCL list literals are JSON, so they parse. HCL maps are not (``{ one = {} }``
+    has unquoted keys and ``=`` for ``:``), and a regex that turns one into the
+    other would be a second, wronger parser. Those raise, which routes them to
+    the same place every other ambiguous literal goes: the decorator declares
+    what it means, with ``| default={"one": {}}``.
+    """
+    try:
+        return json.loads(literal)
+    except json.JSONDecodeError:
+        raise DecoratorError(
+            f"cannot read {literal!r} as a value; HCL maps are not JSON, so "
+            f'declare the default explicitly with | default={{...}}'
+        )
 
 
 def load_legacy_paths(repo_root: Path) -> set:
@@ -212,6 +234,44 @@ def _synthesize_enabled(service_key: str, sections: dict, collector: _Collector)
     }
 
 
+def _synthesize_section_toggles(service_key: str, sections: dict) -> dict:
+    """Fields for the ``@section`` conditions nested under a service.
+
+    A service's own gate becomes ``enabled`` elsewhere. These are the other
+    switches the templates carry -- ``services.eks.karpenterEnabled`` and
+    ``services.eks.networkPolicyEnabled`` -- which the wizard offers today and
+    which nothing in the catalog expressed, so hydrating from it would have
+    dropped them silently. Karpenter in particular gates an entire node
+    provisioner.
+
+    Only direct children: ``services.eks.helmCharts.certManager.enabled`` and
+    its five siblings are nested a level deeper and belong to helmChartsConfig,
+    which OP-208 leaves alone and OP-200 owns.
+    """
+    prefix = f"services.{service_key}."
+    own_gate = f"services.{service_key}.enabled"
+    toggles = {}
+    for dotted, source in sections.items():
+        if not dotted.startswith(prefix) or dotted == own_gate:
+            continue
+        leaf = dotted[len(prefix):]
+        if '.' in leaf:
+            continue
+        toggles[leaf] = {
+            'name': leaf,
+            'path': dotted,
+            'tfVar': None,
+            'valueType': 'boolean',
+            'type': 'toggle',
+            'defaultValue': False,
+            'displayName': leaf,
+            'sectionGated': True,
+            'file': str(source[0]),
+            'line': source[1],
+        }
+    return toggles
+
+
 def _ensure_service(catalog, service_key, module_attrs, sections, collector, where, line):
     """Return the catalog entry for a service, creating it on first sight.
 
@@ -224,6 +284,8 @@ def _ensure_service(catalog, service_key, module_attrs, sections, collector, whe
         return service
 
     enabled = _synthesize_enabled(service_key, sections, collector)
+    if enabled:
+        enabled.update(_synthesize_section_toggles(service_key, sections))
     if not enabled:
         collector.error(
             'NO_SECTION',
@@ -368,7 +430,15 @@ def extract_catalog(repo_root, provider: str = 'aws') -> dict:
         declared_type = attrs.get('valueType')
         if declared_type:
             value_type = declared_type
-            default_value = attrs.get('default', literal)
+            raw_default = attrs.get('default', literal)
+            if value_type in ('list', 'object') and isinstance(raw_default, str):
+                try:
+                    default_value = parse_structured_literal(raw_default)
+                except DecoratorError as exc:
+                    collector.error('UNREADABLE_DEFAULT', f"'{path}': {exc}", file=where, line=number + 1)
+                    continue
+            else:
+                default_value = raw_default
         else:
             try:
                 value_type, default_value = infer_type(literal)
