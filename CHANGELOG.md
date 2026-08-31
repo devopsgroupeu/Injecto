@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0](https://github.com/devopsgroupeu/Injecto/compare/v0.8.0...v0.9.0) (2026-08-31)
+
+### 🚀 Features
+
+* **catalog:** use one vocabulary for the catalog and the wizard ([f914baa](https://github.com/devopsgroupeu/Injecto/commit/f914baaadd879144fe810dc4bbdf5c451e26da45))
+
 ## [0.8.0](https://github.com/devopsgroupeu/Injecto/compare/v0.7.0...v0.8.0) (2026-08-20)
 
 ### 🚀 Features
