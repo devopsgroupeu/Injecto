@@ -42,7 +42,7 @@ def run(tmp_path: Path, files: dict, data: dict) -> dict:
 
 
 ENRICHED = (
-    "# @param services.eks.kubernetesVersion | type=string | label=Version\n"
+    "# @param services.eks.kubernetesVersion | valueType=string | displayName=Version\n"
     'kubernetes_version = "1.30"\n'
 )
 DATA = {"services": {"eks": {"kubernetesVersion": "1.32", "enabled": True}}}
@@ -52,7 +52,7 @@ def test_off_by_default_leaves_the_tail_alone(tmp_path):
     """The default must not change what production already emits."""
     assert processing.TRIM_DECORATOR_ATTRS is False
     out = run(tmp_path, {"a.tfvars": ENRICHED}, DATA)
-    assert "| type=string | label=Version" in out["a.tfvars"]
+    assert "| valueType=string | displayName=Version" in out["a.tfvars"]
 
 
 def test_on_removes_the_tail_and_keeps_the_line(tmp_path, trim):
@@ -65,7 +65,7 @@ def test_on_removes_the_tail_and_keeps_the_line(tmp_path, trim):
 
 def test_line_count_is_unchanged(tmp_path, trim):
     """gate.py addresses the output by template line number."""
-    source = ENRICHED + "\n# @module services.rds | label=RDS\n" + 'rds_engine = "postgres"\n'
+    source = ENRICHED + "\n# @module services.rds | displayName=RDS\n" + 'rds_engine = "postgres"\n'
     out = run(tmp_path, {"a.tfvars": source}, DATA)
     assert len(out["a.tfvars"].splitlines()) == len(source.splitlines())
 
@@ -78,7 +78,7 @@ def test_a_file_whose_only_change_is_a_trim_is_still_written(tmp_path, trim):
     section toggle, so unless the trim sets file_was_modified it takes the copy
     path and ships the tail regardless of the switch.
     """
-    untouched = "# @param services.sqs.queueNames | type=list\nsqs_queue_names = []\n"
+    untouched = "# @param services.sqs.queueNames | valueType=list\nsqs_queue_names = []\n"
     out = run(tmp_path, {"a.tfvars": untouched}, {"services": {"eks": {"enabled": True}}})
     assert out["a.tfvars"] == "# @param services.sqs.queueNames\nsqs_queue_names = []\n"
 
