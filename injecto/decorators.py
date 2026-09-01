@@ -85,7 +85,17 @@ def parse_attrs(tail: str) -> dict:
 
         key, sep, value = segment.partition('=')
         if not sep:
-            raise DecoratorError(f"attribute {segment!r} is not key=value")
+            # Attribute values are split on a bare '|', so a value containing one
+            # -- overwhelmingly a regex alternation in `pattern` -- arrives here
+            # as a fragment. Name the real cause: the default message
+            # ("'b)$' is not key=value") sends the author looking for a typo that
+            # is not there. This fails the gate rather than shipping a mangled
+            # pattern, which is the behaviour we want; only the wording was bad.
+            raise DecoratorError(
+                f"attribute {segment!r} is not key=value"
+                " (a '|' inside an attribute value splits the decorator;"
+                " alternation in a pattern is not supported yet)"
+            )
 
         key = key.strip()
         value = value.strip()

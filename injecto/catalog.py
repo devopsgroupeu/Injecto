@@ -496,8 +496,40 @@ def extract_catalog(repo_root, provider: str = 'aws') -> dict:
             'line': number,
         }
         for key, value in attrs.items():
-            if key not in ('valueType', 'default', 'exclude'):
+            if key not in ('valueType', 'default', 'exclude', 'pattern'):
                 field[key] = value
+
+        # `pattern` is declared flat in the decorator but emitted nested, because
+        # the wizard reads `validation.pattern` and compiles it to a RegExp. The
+        # alternative -- a JSON `validation={...}` attribute -- would make every
+        # author double-escape the regex once for JSON and once for the regex
+        # itself, which is how a backslash goes missing without anyone noticing.
+        #
+        # Emitting the shape the consumer already expects also keeps the mapping
+        # out of the frontend: a translation layer between what the catalog says
+        # and what the wizard reads is exactly where the two drift apart.
+        if 'pattern' in attrs:
+            raw_pattern = str(attrs['pattern']).strip()
+            if not raw_pattern:
+                collector.error(
+                    'EMPTY_PATTERN',
+                    f"'{path}' declares an empty pattern; drop the attribute instead",
+                    file=where, line=number,
+                )
+                continue
+            try:
+                re.compile(raw_pattern)
+            except re.error as exc:
+                # Caught here rather than in the browser: an invalid pattern is
+                # dropped silently by the frontend's compilePattern, so the field
+                # would ship with NO validation and the gate would stay green.
+                collector.error(
+                    'BAD_PATTERN',
+                    f"'{path}' pattern does not compile: {exc}",
+                    file=where, line=number,
+                )
+                continue
+            field['validation'] = {'pattern': raw_pattern}
 
         if is_global:
             catalog['global']['fields'][path] = field
