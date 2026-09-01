@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0](https://github.com/devopsgroupeu/Injecto/compare/v0.10.0...v0.11.0) (2026-09-01)
+
+### 🚀 Features
+
+* **catalog:** carry field validation patterns from the templates into the catalog ([9095eb0](https://github.com/devopsgroupeu/Injecto/commit/9095eb055824704e574aa9fda1922fba85d37cd5))
+
 ## [0.10.0](https://github.com/devopsgroupeu/Injecto/compare/v0.9.1...v0.10.0) (2026-08-31)
 
 ### 🚀 Features
