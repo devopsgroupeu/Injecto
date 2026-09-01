@@ -23,7 +23,7 @@ from .logs import logger, green, yellow, red, request_id_var
 from .processing import GenerationError, load_and_merge_data, process_files
 from .formatting import run_terraform_fmt
 from .catalog import extract_catalog
-from .git import clone_repository, mask_url_credentials
+from .git import clone_repository, get_cached_templates, mask_url_credentials
 from .version import __version__
 from .auth import require_service_token
 
@@ -176,7 +176,7 @@ async def health_check():
     """Health check endpoint."""
     return HealthResponse(status="healthy", version=__version__)
 
-def generate_from_git(request: ProcessRequest, temp_dir: Path) -> Path:
+def generate_from_git(request: ProcessRequest, temp_dir: Path, use_cache: bool = False) -> Path:
     """Clone, process and format into a fresh output dir; return that dir.
 
     Shared by /process and /process-git-download, which differ only in what they
@@ -184,17 +184,24 @@ def generate_from_git(request: ProcessRequest, temp_dir: Path) -> Path:
     place is what stops them drifting apart - /process used to skip
     run_terraform_fmt, so the same request produced differently formatted
     Terraform depending on which endpoint you asked.
+
+    use_cache: when True the templates repo is shallow-cloned into a persistent
+    cache dir and refreshed with a shallow fetch per request, so repeated calls
+    don't pay for a full cold clone every time.
     """
     if not request.repo_url:
         raise HTTPException(status_code=400, detail="repo_url is required when source is 'git'")
 
-    clone_path = temp_dir / "clone"
-    if not clone_repository(
-        repo_url=request.repo_url,
-        clone_path=str(clone_path),
-        branch=request.branch,
-    ):
-        raise HTTPException(status_code=400, detail="Failed to clone repository")
+    if use_cache:
+        clone_path = get_cached_templates(request.repo_url, request.branch or "main")
+    else:
+        clone_path = temp_dir / "clone"
+        if not clone_repository(
+            repo_url=request.repo_url,
+            clone_path=str(clone_path),
+            branch=request.branch,
+        ):
+            raise HTTPException(status_code=400, detail="Failed to clone repository")
 
     input_dir = clone_path / request.input_dir
     if not input_dir.exists():
@@ -323,7 +330,7 @@ async def process_git_download(request: ProcessRequest):
         if request.source != "git":
             raise HTTPException(status_code=400, detail="This endpoint requires git source with repo_url")
 
-        output_dir = generate_from_git(request, temp_dir)
+        output_dir = generate_from_git(request, temp_dir, use_cache=True)
 
         return create_zip_response(output_dir)
 

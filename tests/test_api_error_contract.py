@@ -24,7 +24,7 @@ def generate_raises(monkeypatch):
     """Make the git pipeline raise whatever the test asks for."""
 
     def _apply(exc):
-        def boom(request, temp_dir):
+        def boom(request, temp_dir, use_cache=False):
             raise exc
 
         monkeypatch.setattr(api, "generate_from_git", boom)
