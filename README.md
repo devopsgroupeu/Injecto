@@ -11,6 +11,26 @@
 
 A Python tool that automatically replaces placeholders in code or configuration files with values from a YAML file.
 
+## 🧩 What it does
+
+Injecto edits configuration files **in place** using three decorator comments, and
+extracts a service catalog from those same decorators.
+
+```
+# @param   <dot.path> [| key=value]...    replaces the value on the next line
+# @module  <dot.path> [| key=value]...    declares a service to the catalog
+# @section <dot.path> begin | end         comments the block out when falsy
+```
+
+The input files stay valid configuration on their own — nothing is a placeholder
+waiting to be filled in. The grammar is defined once, in `injecto/decorators.py`,
+and imported by both the substituter and the catalog extractor.
+
+> **An unresolved `@param` is not an error.** The file keeps the value it already
+> had, and the run still succeeds. Check the output, not the exit code.
+
+See `CLAUDE.md` for the full grammar, the attribute tail and catalog extraction.
+
 ## ⚙️ Usage
 
 ### Local
