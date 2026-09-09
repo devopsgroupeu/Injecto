@@ -143,14 +143,36 @@ def test_get_cached_templates_clones_into_cache_on_first_use(monkeypatch, tmp_pa
     assert str(cache_path) in clone_command
 
 
+def _init_real_repo(path):
+    """Create a genuine git working tree at `path` (init + one commit).
+
+    The cache-validity check looks for a .git directory, so a fixture that
+    exercises the refresh path must be a real repo, not just a dir with files.
+    """
+    subprocess.run(["git", "init", "-q", str(path)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(path), "config", "user.name", "Test User"],
+        check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(path), "config", "user.email", "test@example.com"],
+        check=True, capture_output=True,
+    )
+    (path / "README.md").write_text("templates")
+    subprocess.run(["git", "-C", str(path), "add", "."], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(path), "commit", "-q", "-m", "init"],
+        check=True, capture_output=True,
+    )
+
+
 def test_get_cached_templates_refreshes_existing_cache(monkeypatch, tmp_path):
     """Later requests refresh the cached clone with a shallow fetch + reset."""
     repo_url = "https://github.com/org/templates.git"
     branch = "main"
     cache_key = hashlib.sha256(f"{repo_url}|{branch}".encode("utf-8")).hexdigest()[:16]
     cache_path = tmp_path / cache_key
-    cache_path.mkdir()
-    (cache_path / "README.md").write_text("templates")
+    _init_real_repo(cache_path)
 
     seen = []
 
@@ -167,3 +189,111 @@ def test_get_cached_templates_refreshes_existing_cache(monkeypatch, tmp_path):
     assert seen[1][:4] == ["git", "-C", str(cache_path), "reset"]
     # No full clone on cache hits
     assert all(cmd[0] != "git" or cmd[1] != "clone" for cmd in seen)
+
+
+def test_a_partial_clone_without_git_is_wiped_and_recloned(monkeypatch, tmp_path):
+    """A clone killed by the timeout leaves a non-empty directory without .git.
+    That debris must be wiped and re-cloned, not treated as a valid cache
+    forever (clone_repository refuses non-empty targets, so it could never
+    self-heal otherwise)."""
+    repo_url = "https://github.com/org/templates.git"
+    branch = "main"
+    cache_key = hashlib.sha256(f"{repo_url}|{branch}".encode("utf-8")).hexdigest()[:16]
+    cache_path = tmp_path / cache_key
+    cache_path.mkdir()
+    (cache_path / "objects").mkdir()
+    (cache_path / "objects" / "tmp-pack").write_text("partial clone debris")
+
+    seen = []
+
+    def fake_run(command, **kwargs):
+        # Simulate git clone actually creating a working tree with .git.
+        if command[:2] == ["git", "clone"]:
+            os.makedirs(os.path.join(command[-1], ".git"), exist_ok=True)
+        seen.append(command)
+        return _FakeCompleted()
+
+    monkeypatch.setattr(subprocess, 'run', fake_run)
+    result = get_cached_templates(repo_url, branch, cache_dir=str(tmp_path))
+
+    # The debris was wiped and a fresh clone attempted
+    assert seen[0][:2] == ["git", "clone"]
+    assert result == cache_path
+    assert (cache_path / ".git").exists()
+
+
+def test_a_failed_clone_cleans_up_the_partial_cache_dir(monkeypatch, tmp_path):
+    """A clone that fails inside the cached path must not leave debris behind:
+    a partial directory would poison the cache key until the pod restarts."""
+    repo_url = "https://github.com/org/templates.git"
+    branch = "main"
+    cache_key = hashlib.sha256(f"{repo_url}|{branch}".encode("utf-8")).hexdigest()[:16]
+
+    def fake_run(command, **kwargs):
+        if command[:2] == ["git", "clone"]:
+            # git creates the target before the transfer fails
+            os.makedirs(command[-1], exist_ok=True)
+            raise subprocess.CalledProcessError(128, command, stderr="fatal: hung up\n")
+        return _FakeCompleted()
+
+    monkeypatch.setattr(subprocess, 'run', fake_run)
+    with pytest.raises(RuntimeError, match="Failed to clone templates repository"):
+        get_cached_templates(repo_url, branch, cache_dir=str(tmp_path))
+
+    assert not (tmp_path / cache_key).exists()
+
+
+def test_a_failed_refresh_leaves_the_valid_cache_in_place(monkeypatch, tmp_path):
+    """If fetch/reset fails on a valid cache, the older copy is still a working
+    tree: keep it and let the error propagate rather than wiping the cache."""
+    repo_url = "https://github.com/org/templates.git"
+    branch = "main"
+    cache_key = hashlib.sha256(f"{repo_url}|{branch}".encode("utf-8")).hexdigest()[:16]
+    cache_path = tmp_path / cache_key
+    _init_real_repo(cache_path)
+
+    def fake_run(command, **kwargs):
+        if "fetch" in command:
+            raise subprocess.TimeoutExpired(command, 60)
+        return _FakeCompleted()
+
+    monkeypatch.setattr(subprocess, 'run', fake_run)
+    with pytest.raises(subprocess.TimeoutExpired):
+        get_cached_templates(repo_url, branch, cache_dir=str(tmp_path))
+
+    # The valid cache survived the failed refresh
+    assert (cache_path / ".git").exists()
+    assert (cache_path / "README.md").exists()
+
+
+def test_snapshot_dest_receives_the_tree_without_git(monkeypatch, tmp_path):
+    """With dest, the caller gets a private snapshot copied under the lock:
+    returned path is dest, it holds the tree, and .git is excluded. A stale
+    dest is cleared first, and the cache itself keeps its .git."""
+    repo_url = "https://github.com/org/templates.git"
+    branch = "main"
+    cache_key = hashlib.sha256(f"{repo_url}|{branch}".encode("utf-8")).hexdigest()[:16]
+    cache_path = tmp_path / cache_key
+
+    def fake_run(command, **kwargs):
+        if command[:2] == ["git", "clone"]:
+            target = command[-1]
+            os.makedirs(os.path.join(target, ".git"), exist_ok=True)
+            os.makedirs(os.path.join(target, "modules"), exist_ok=True)
+            with open(os.path.join(target, "modules", "main.tf"), "w") as f:
+                f.write("# template\n")
+        return _FakeCompleted()
+
+    monkeypatch.setattr(subprocess, 'run', fake_run)
+
+    dest = tmp_path / "snapshot"
+    dest.mkdir()
+    (dest / "stale.txt").write_text("from a previous request")
+
+    result = get_cached_templates(repo_url, branch, cache_dir=str(tmp_path), dest=dest)
+
+    assert result == dest
+    assert (dest / "modules" / "main.tf").exists()
+    assert not (dest / "stale.txt").exists(), "a pre-existing dest must be cleared"
+    assert not (dest / ".git").exists()
+    assert (cache_path / ".git").exists()

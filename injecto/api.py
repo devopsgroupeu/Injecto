@@ -193,7 +193,20 @@ def generate_from_git(request: ProcessRequest, temp_dir: Path, use_cache: bool =
         raise HTTPException(status_code=400, detail="repo_url is required when source is 'git'")
 
     if use_cache:
-        clone_path = get_cached_templates(request.repo_url, request.branch or "main")
+        # The cached path can fail in several ways (clone refused, fetch/reset
+        # subprocess error or timeout). Whatever the cause, callers must get the
+        # same 400 contract as the non-cache path, not a 500.
+        try:
+            clone_path = get_cached_templates(
+                request.repo_url, request.branch or "main", dest=temp_dir / "templates"
+            )
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.error(
+                red(f"Failed to obtain cached templates: {mask_url_credentials(str(e))}")
+            )
+            raise HTTPException(status_code=400, detail="Failed to clone repository") from e
     else:
         clone_path = temp_dir / "clone"
         if not clone_repository(
