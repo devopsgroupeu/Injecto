@@ -7,6 +7,8 @@ the backend keys its user-facing message off that status and the `code` in the
 body (OP-214), so an endpoint that regresses to 500 loses the explanation.
 """
 
+import subprocess
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -24,7 +26,7 @@ def generate_raises(monkeypatch):
     """Make the git pipeline raise whatever the test asks for."""
 
     def _apply(exc):
-        def boom(request, temp_dir):
+        def boom(request, temp_dir, use_cache=False):
             raise exc
 
         monkeypatch.setattr(api, "generate_from_git", boom)
@@ -60,6 +62,43 @@ def test_a_400_is_passed_through_untouched(endpoint):
 
     assert response.status_code == 400
     assert "repo_url" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "exc",
+    [
+        RuntimeError("Failed to clone templates repository"),
+        subprocess.CalledProcessError(128, ["git", "fetch"], stderr="fatal: hung up\n"),
+        subprocess.TimeoutExpired(["git", "fetch"], 60),
+    ],
+    ids=["runtime-error", "called-process-error", "timeout"],
+)
+def test_a_cached_clone_failure_answers_the_same_400_as_the_uncached_path(
+    monkeypatch, exc
+):
+    """get_cached_templates raises RuntimeError/CalledProcessError/TimeoutExpired,
+    none of which are HTTPException. /process-git-download must translate any of
+    them into the same 400 the non-cache path answers with, not a 500."""
+
+    def boom(request, temp_dir, use_cache=False):
+        raise exc
+
+    monkeypatch.setattr(api, "get_cached_templates", boom)
+    response = client.post("/process-git-download", json=GIT_BODY)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Failed to clone repository"
+
+
+def test_the_uncached_clone_failure_answers_400(monkeypatch):
+    """Baseline for the contract above: the non-cache path answers 400 with the
+    same detail when clone_repository reports failure."""
+    monkeypatch.setattr(api, "clone_repository", lambda **kwargs: False)
+
+    response = client.post("/process", json=GIT_BODY)
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Failed to clone repository"
 
 
 def test_upload_endpoint_translates_generation_errors_the_same_way(monkeypatch):

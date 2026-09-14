@@ -3,6 +3,10 @@
 import subprocess
 import os
 import re
+import hashlib
+import fcntl
+import shutil
+from pathlib import Path
 
 from .logs import logger, green, yellow, red
 
@@ -111,3 +115,91 @@ def clone_repository(repo_url, clone_path, branch=None, username=None, pat=None,
             )
         )
         return False
+
+
+def get_cached_templates(repo_url, branch, cache_dir=None, timeout=60, dest=None):
+    """
+    Shallow-clone (or refresh) the templates repo into a persistent cache dir.
+
+    The infra-templates repo is static and small (~90 KB pack), so a full cold
+    clone per request is pure waste. The cache is keyed by repo URL + branch:
+      - first request: shallow clone (--depth 1 --single-branch) into the cache
+      - later requests: shallow fetch + hard reset to the branch tip, so every
+        request still sees the latest templates
+
+    A per-key file lock serializes concurrent refreshes (multiple uvicorn
+    workers or overlapping requests must not fetch/reset the same repo at once).
+
+    A cache entry is only trusted when it is a real git working tree (it has a
+    .git directory). A partial directory left behind by a clone that was killed
+    by the timeout is wiped and re-cloned, so a poisoned cache can always
+    self-heal. If the refresh (fetch/reset) of a valid cache fails, the older
+    valid copy is left in place and the error propagates.
+
+    Args:
+        dest (Path, optional): when given, a snapshot of the working tree
+            (excluding .git) is copied into it while the per-key lock is still
+            held, and `dest` is returned instead of the cache dir. The caller
+            owns `dest` and may delete it when done. Without `dest` the cached
+            clone directory itself is returned and the caller must NOT delete
+            it.
+
+    Returns:
+        Path: `dest` if given, else the cached clone directory.
+    """
+    cache_dir = cache_dir or os.environ.get("TEMPLATES_CACHE_DIR", "/tmp/injecto-templates-cache")
+    cache_key = hashlib.sha256(f"{repo_url}|{branch}".encode("utf-8")).hexdigest()[:16]
+    cache_path = Path(cache_dir) / cache_key
+    lock_path = Path(cache_dir) / f"{cache_key}.lock"
+
+    os.makedirs(cache_dir, exist_ok=True)
+
+    with open(lock_path, "w") as lock_file:
+        fcntl.flock(lock_file, fcntl.LOCK_EX)
+        try:
+            if cache_path.exists() and (cache_path / ".git").exists():
+                logger.info(f"Refreshing cached templates: {cache_path}")
+                subprocess.run(
+                    ["git", "-C", str(cache_path), "fetch", "--depth", "1", "origin", branch],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+                subprocess.run(
+                    ["git", "-C", str(cache_path), "reset", "--hard", "FETCH_HEAD"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=timeout,
+                )
+            else:
+                if cache_path.exists():
+                    # A non-empty directory without .git is debris from a clone
+                    # that was killed by the timeout; clone_repository refuses
+                    # non-empty targets, so it must be wiped before retrying.
+                    logger.warning(
+                        f"Removing invalid cached templates directory: {cache_path}"
+                    )
+                    shutil.rmtree(cache_path, ignore_errors=True)
+                logger.info(f"Cloning templates into cache: {cache_path}")
+                success = clone_repository(
+                    repo_url, str(cache_path), branch=branch, depth=1, timeout=timeout
+                )
+                if not success:
+                    # Never leave a partial clone behind: it would poison the
+                    # cache key until the pod restarts.
+                    shutil.rmtree(cache_path, ignore_errors=True)
+                    raise RuntimeError(f"Failed to clone templates repository: {repo_url}")
+            if dest is not None:
+                # Snapshot under the lock: the caller reads a private copy, so a
+                # concurrent refresh cannot reset the tree out from under it.
+                dest = Path(dest)
+                if dest.exists():
+                    shutil.rmtree(dest, ignore_errors=True)
+                shutil.copytree(cache_path, dest, ignore=shutil.ignore_patterns(".git"))
+                return dest
+        finally:
+            fcntl.flock(lock_file, fcntl.LOCK_UN)
+
+    return cache_path
