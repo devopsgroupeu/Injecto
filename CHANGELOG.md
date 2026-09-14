@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0](https://github.com/devopsgroupeu/Injecto/compare/v0.11.0...v0.12.0) (2026-09-14)
+
+### 🚀 Features
+
+* cache templates repo with shallow clone ([#24](https://github.com/devopsgroupeu/Injecto/issues/24)) ([68e779a](https://github.com/devopsgroupeu/Injecto/commit/68e779af7094c0de898ef1472575c31282dd601e))
+
+### 📚 Documentation
+
+* state the decorator grammar and catalog extraction in the README ([#30](https://github.com/devopsgroupeu/Injecto/issues/30)) ([de40404](https://github.com/devopsgroupeu/Injecto/commit/de4040449f8a31c77a24e830d1d588de0c4ae8ee))
+
 ## [0.11.0](https://github.com/devopsgroupeu/Injecto/compare/v0.10.0...v0.11.0) (2026-09-01)
 
 ### 🚀 Features
