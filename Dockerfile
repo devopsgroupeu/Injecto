@@ -60,6 +60,10 @@ USER appuser
 # Expose port for API mode
 EXPOSE 8000
 
+# Prometheus metrics, served on their own port so they are never reachable
+# through whatever ingress fronts the API port (see injecto/metrics.py)
+EXPOSE 9090
+
 # Define the entrypoint for the container.
 # This makes the container behave like an executable for the script.
 # Arguments passed to `docker run` will be appended to this command.
