@@ -3,3 +3,4 @@ colorama==0.4.6
 FastAPI>=0.104.0
 uvicorn[standard]>=0.24.0
 python-multipart==0.0.20
+prometheus-client>=0.20.0

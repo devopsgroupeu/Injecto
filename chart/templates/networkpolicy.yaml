@@ -13,8 +13,13 @@ spec:
   # (it needs to clone the templates repo and resolve DNS).
   policyTypes:
     - Ingress
-  {{- with .Values.networkPolicy.ingress }}
+  {{- if or .Values.networkPolicy.ingress .Values.metrics.enabled }}
   ingress:
+    {{- with .Values.networkPolicy.ingress }}
     {{- toYaml . | nindent 4 }}
+    {{- end }}
+    {{- if .Values.metrics.enabled }}
+    {{- include "injecto.metricsScrapeRule" . | nindent 4 }}
+    {{- end }}
   {{- end }}
 {{- end }}

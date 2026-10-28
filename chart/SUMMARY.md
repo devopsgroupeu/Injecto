@@ -67,7 +67,7 @@ chart/
 ✅ Liveness probe (configurable)
 ✅ Readiness probe (configurable)
 ✅ Structured logging support
-✅ Ready for Prometheus integration
+✅ Prometheus metrics on a dedicated port, with a ServiceMonitor
 
 ### Configuration
 ✅ Comprehensive values.yaml
@@ -217,7 +217,6 @@ helm rollback injecto
 - Resource usage limits
 
 ### Future Enhancements
-- Prometheus ServiceMonitor
 - Custom metrics
 - Distributed tracing
 - Log aggregation integration

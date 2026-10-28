@@ -345,15 +345,43 @@ The chart includes built-in health checks:
 
 ### Metrics
 
-To enable metrics collection (requires Prometheus):
+Prometheus metrics are enabled by default and served on a **dedicated port**
+(9090), separate from the API port. The endpoint is unauthenticated, so serving
+it on the API port would expose route names, error rates and latency
+distributions through any ingress fronting that port.
+
+The chart ships a ServiceMonitor pointing at the `metrics` Service port, so a
+cluster running the Prometheus Operator picks it up with no further
+configuration. It is only rendered when the cluster serves
+`monitoring.coreos.com/v1`, so installing on a cluster without the Prometheus
+Operator does not fail:
 
 ```yaml
-# metrics-values.yaml
-podAnnotations:
-  prometheus.io/scrape: "true"
-  prometheus.io/port: "8000"
-  prometheus.io/path: "/metrics"  # If you implement metrics endpoint
+metrics:
+  enabled: true
+  port: 9090
+
+serviceMonitor:
+  enabled: true
+  interval: 30s
+  path: /metrics
 ```
+
+Exposed metrics: `http_requests_total` and `http_request_duration_seconds`,
+both labelled by `method`, `route` (the matched route pattern) and
+`status_code`, plus the default Python process metrics. Probe traffic to
+`/health` is not counted, so it cannot drown out real requests.
+
+If `networkPolicy.enabled` is set, the chart adds an ingress rule letting the
+namespaces matched by `metrics.scrapeNamespaceSelector` (default: `monitoring`)
+reach the metrics port. It is rendered by the chart, not listed in
+`networkPolicy.ingress`, so overriding that list cannot drop it. Point the
+selector at wherever your Prometheus runs.
+
+With the default `ClusterIP` Service the metrics port sits on the main Service.
+If `service.type` is `LoadBalancer` or `NodePort`, it moves to a separate
+`<fullname>-metrics` ClusterIP Service (e.g. `injecto-metrics`) so it is never exposed outside the
+cluster.
 
 ## Upgrading
 

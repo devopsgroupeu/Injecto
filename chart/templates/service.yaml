@@ -15,5 +15,13 @@ spec:
       targetPort: {{ .Values.service.targetPort }}
       protocol: TCP
       name: http
+    {{- /* An externally reachable Service type would expose the unauthenticated
+    metrics port; metrics-service.yaml serves it in-cluster instead. */}}
+    {{- if and .Values.metrics.enabled (eq .Values.service.type "ClusterIP") }}
+    - port: {{ .Values.metrics.port }}
+      targetPort: metrics
+      protocol: TCP
+      name: metrics
+    {{- end }}
   selector:
     {{- include "injecto.selectorLabels" . | nindent 4 }}

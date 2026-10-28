@@ -1,3 +1,6 @@
+{{- if and .Values.metrics.enabled (eq (int .Values.metrics.port) (int .Values.service.targetPort)) }}
+{{- fail "metrics.port must differ from service.targetPort: the metrics listener and the API cannot share a port" }}
+{{- end }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -43,6 +46,11 @@ spec:
         - name: http
           containerPort: {{ .Values.service.targetPort }}
           protocol: TCP
+        {{- if .Values.metrics.enabled }}
+        - name: metrics
+          containerPort: {{ .Values.metrics.port }}
+          protocol: TCP
+        {{- end }}
         {{- if .Values.livenessProbe.enabled }}
         livenessProbe:
           httpGet:
@@ -67,10 +75,16 @@ spec:
         {{- end }}
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
-        {{- with .Values.env }}
         env:
-          {{- toYaml . | nindent 12 }}
-        {{- end }}
+          {{- with .Values.env }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+          # Set from the chart, and last so it wins over a duplicate in env, so
+          # the port the app binds always matches the metrics container port.
+          - name: METRICS_ENABLED
+            value: {{ .Values.metrics.enabled | quote }}
+          - name: METRICS_PORT
+            value: {{ .Values.metrics.port | quote }}
         {{- with .Values.envFrom }}
         envFrom:
           {{- toYaml . | nindent 12 }}

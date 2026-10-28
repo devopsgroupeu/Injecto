@@ -8,7 +8,7 @@ import shutil
 import time
 import zipfile
 import io
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -26,13 +26,29 @@ from .catalog import extract_catalog
 from .git import clone_repository, get_cached_templates, mask_url_credentials
 from .version import __version__
 from .auth import require_service_token
+from .metrics import metrics_middleware, start_metrics_server
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Start the metrics listener in the process that serves requests.
+
+    Not in run_api_server(): under uvicorn --reload that process only
+    supervises, so a listener started there would expose an empty registry.
+    """
+    start_metrics_server()
+    yield
+
 
 # --- FastAPI App Setup ---
 app = FastAPI(
     title="Injecto API",
     description="A REST API for processing configuration files with YAML data injection using @param and @section directives",
-    version=__version__
+    version=__version__,
+    lifespan=lifespan,
 )
+
+app.middleware("http")(metrics_middleware)
 
 
 @app.middleware("http")
