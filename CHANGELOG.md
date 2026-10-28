@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.0](https://github.com/devopsgroupeu/Injecto/compare/v0.12.0...v0.13.0) (2026-10-28)
+
+### 🚀 Features
+
+* **metrics:** expose red metrics on a dedicated port (OP-176) ([#31](https://github.com/devopsgroupeu/Injecto/issues/31)) ([837f067](https://github.com/devopsgroupeu/Injecto/commit/837f0671202cf37d51d261376ee4c95356706b2c))
+
 ## [0.12.0](https://github.com/devopsgroupeu/Injecto/compare/v0.11.0...v0.12.0) (2026-09-14)
 
 ### 🚀 Features
