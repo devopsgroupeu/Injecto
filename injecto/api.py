@@ -248,8 +248,13 @@ def generate_from_git(request: ProcessRequest, temp_dir: Path, use_cache: bool =
     return output_dir
 
 
+# The three processing handlers are plain `def`, like /catalog: they clone with
+# git and run `terraform fmt` through blocking subprocess calls, and FastAPI
+# runs sync handlers in its threadpool. As `async def` they ran on the event
+# loop of the single uvicorn worker and stalled every other request, /health
+# included, for as long as a clone took (OP-264).
 @app.post("/process", response_model=ProcessResponse, dependencies=[Depends(require_service_token)])
-async def process_templates_endpoint(request: ProcessRequest):
+def process_templates_endpoint(request: ProcessRequest):
     """
     Dry run: process configuration files from Git and report whether the
     generation succeeds, without returning the tree.
@@ -272,7 +277,7 @@ async def process_templates_endpoint(request: ProcessRequest):
         )
 
 @app.post("/process-upload", dependencies=[Depends(require_service_token)])
-async def process_with_upload(
+def process_with_upload(
     files: List[UploadFile] = File(...),
     config_files: List[UploadFile] = File(default=[]),
     data: str = Form(default="{}")
@@ -299,7 +304,9 @@ async def process_with_upload(
                 # merged as YAML and their directory structure is never used, so the
                 # simplest safe form is also the correct one. The index keeps two
                 # uploads with the same basename from overwriting each other.
-                config_content = await config_file.read()
+                # .file is the underlying spooled file; a sync handler reads it
+                # directly instead of awaiting UploadFile.read().
+                config_content = config_file.file.read()
                 safe_name = Path(config_file.filename or "").name
                 if not safe_name:
                     raise HTTPException(status_code=400, detail="Config upload is missing a filename")
@@ -331,7 +338,7 @@ async def process_with_upload(
             file_path = safe_upload_path(input_dir, file.filename)
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            content = await file.read()
+            content = file.file.read()
             with open(file_path, 'wb') as f:
                 f.write(content)
 
@@ -348,7 +355,7 @@ async def process_with_upload(
         return create_zip_response(output_dir)
 
 @app.post("/process-git-download", dependencies=[Depends(require_service_token)])
-async def process_git_download(request: ProcessRequest):
+def process_git_download(request: ProcessRequest):
     """
     Process configuration files from Git repository and return a zip file with results.
 
@@ -456,9 +463,8 @@ def get_catalog(
     """Serve the wizard catalog extracted from a templates repository.
 
     Declared with `def`, not `async def`, deliberately: this clones and walks a
-    filesystem, and FastAPI runs sync handlers in a threadpool. The neighbouring
-    /process handlers do the same blocking work on an `async def` and stall the
-    event loop for every other request while a clone runs.
+    filesystem, and FastAPI runs sync handlers in a threadpool, as it does the
+    /process handlers since OP-264.
 
     The ETag is the templates commit sha, so a frontend that already holds the
     current catalog revalidates for the cost of one ls-remote.
