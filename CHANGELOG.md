@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.3](https://github.com/devopsgroupeu/Injecto/compare/v0.13.2...v0.13.3) (2026-10-29)
+
+### 🐛 Bug Fixes
+
+* harden request inputs against HCL injection, path traversal and allowlist bypass (OP-259) ([#32](https://github.com/devopsgroupeu/Injecto/issues/32)) ([3749fbd](https://github.com/devopsgroupeu/Injecto/commit/3749fbdb1c1d5980c47639037d6804418c739ec6))
+
 ## [0.13.2](https://github.com/devopsgroupeu/Injecto/compare/v0.13.1...v0.13.2) (2026-10-29)
 
 ### 🐛 Bug Fixes
