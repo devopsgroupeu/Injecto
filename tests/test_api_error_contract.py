@@ -18,7 +18,14 @@ from injecto.processing import GenerationError
 
 client = TestClient(app, raise_server_exceptions=False)
 
-GIT_BODY = {"repo_url": "https://example.invalid/x.git", "input_dir": "t/", "data": {}}
+GIT_BODY = {"repo_url": "https://example.invalid/org/x.git", "input_dir": "t/", "data": {}}
+
+
+@pytest.fixture(autouse=True)
+def allow_the_test_repo(monkeypatch):
+    """Every cloning endpoint checks the allowlist (OP-259); these tests are about
+    what happens after that check."""
+    monkeypatch.setattr(api, "CATALOG_REPO_ALLOWLIST", ["https://example.invalid/org/"])
 
 
 @pytest.fixture

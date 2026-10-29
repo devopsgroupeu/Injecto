@@ -108,10 +108,9 @@ def format_value_for_file(value):
     - Numbers and other types are converted to their string representation.
     """
     if isinstance(value, str):
-        # Avoid double-quoting if already quoted
-        if (value.startswith('"') and value.endswith('"')) or \
-           (value.startswith("'") and value.endswith("'")):
-            return value
+        # Every string, including one that already starts and ends with a quote:
+        # passing those through verbatim let a wizard value such as
+        # '"x"\nresource ... "' land in the output as code (OP-259).
         # json.dumps rather than f'"{value}"': both HCL and YAML accept
         # JSON-style escapes, so this is byte-identical for every value that
         # already worked, and only differs where the naive form was broken — an
@@ -123,6 +122,20 @@ def format_value_for_file(value):
     if isinstance(value, (list, dict)):
         return json.dumps(value)
     return str(value)
+
+# Files whose quoted strings are HCL templates, where `${` evaluates an
+# expression and `%{` a directive. YAML has no such syntax, so the same
+# escaping there would change the value.
+HCL_TEMPLATE_SUFFIXES = {".tf", ".tfvars", ".tftpl", ".hcl"}
+
+def escape_hcl_templates(formatted_value: str) -> str:
+    """Make `${` and `%{` literal in a value formatted by format_value_for_file.
+
+    `$${` and `%%{` are HCL's literal forms. Applied to the whole formatted
+    value: `$` and `%` can only occur inside its JSON string literals, so this
+    covers strings nested in lists and maps too (OP-259).
+    """
+    return formatted_value.replace("${", "$${").replace("%{", "%%{")
 
 # --- Core Functions ---
 
@@ -175,6 +188,13 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
     # the output while the run reported success. Collected here and raised below.
     failed_files = []
     input_file_count = 0
+
+    # Refused before anything is written: copy2 and open() follow a link, so
+    # `values.yaml -> /proc/self/environ` in a templates repo would ship this
+    # process's environment to the customer (OP-259).
+    symlinks = sorted(str(p.relative_to(input_dir)) for p in input_dir.rglob("*") if p.is_symlink())
+    if symlinks:
+        raise ValueError(f"Symlinks are not allowed in templates: {', '.join(symlinks)}")
 
     for file_path in input_dir.rglob("*"):
         if not file_path.is_file():
@@ -253,6 +273,8 @@ def process_files(input_dir: Path, output_dir: Path, data: dict):
                         if line_structure_match:
                             line_prefix = line_structure_match.group(1).rstrip()
                             formatted_new_value = format_value_for_file(value_from_yaml)
+                            if file_path.suffix in HCL_TEMPLATE_SUFFIXES:
+                                formatted_new_value = escape_hcl_templates(formatted_new_value)
                             original_value_part = original_next_line[len(line_structure_match.group(1)):]
 
                             # Refuse rather than corrupt: rewriting a line that opens a

@@ -10,14 +10,15 @@ from pathlib import Path
 
 from .logs import logger, green, yellow, red
 
-# Matches the "user:pass@" segment of a URL so credentials (e.g. a git PAT in an
-# authenticated clone URL) can be stripped before anything is written to logs.
-_URL_CREDENTIALS_RE = re.compile(r"://[^/\s:@]+:[^/\s@]+@")
+# Matches the whole userinfo of a URL, "user:pass@" or a bare "TOKEN@" (the
+# usual form for a GitHub/GitLab PAT), so credentials can be stripped before
+# anything is written to logs.
+_URL_CREDENTIALS_RE = re.compile(r"://[^/\s]+@")
 
 
 def mask_url_credentials(text):
-    """Replace any user:pass@ credentials in a string with ://***:***@."""
-    return _URL_CREDENTIALS_RE.sub("://***:***@", text)
+    """Replace any userinfo (user:pass@ or token@) in a string with ://***@."""
+    return _URL_CREDENTIALS_RE.sub("://***@", text)
 
 
 def clone_repository(repo_url, clone_path, branch=None, username=None, pat=None,
@@ -79,7 +80,7 @@ def clone_repository(repo_url, clone_path, branch=None, username=None, pat=None,
     command.append("--")
     command.extend([authenticated_url, clone_path])
 
-    # Mask any user:pass@ credentials before logging the command, so an
+    # Mask any URL credentials before logging the command, so an
     # authenticated clone URL never writes a git PAT to the logs.
     logger.info(f"Executing command: {mask_url_credentials(' '.join(command))}")
 
@@ -159,8 +160,11 @@ def get_cached_templates(repo_url, branch, cache_dir=None, timeout=60, dest=None
         try:
             if cache_path.exists() and (cache_path / ".git").exists():
                 logger.info(f"Refreshing cached templates: {cache_path}")
+                # `--` as on clone and ls-remote: without it a branch beginning
+                # with '-' is parsed as a fetch option, and --upload-pack runs a
+                # command (OP-259).
                 subprocess.run(
-                    ["git", "-C", str(cache_path), "fetch", "--depth", "1", "origin", branch],
+                    ["git", "-C", str(cache_path), "fetch", "--depth", "1", "--", "origin", branch],
                     check=True,
                     capture_output=True,
                     text=True,
@@ -197,7 +201,10 @@ def get_cached_templates(repo_url, branch, cache_dir=None, timeout=60, dest=None
                 dest = Path(dest)
                 if dest.exists():
                     shutil.rmtree(dest, ignore_errors=True)
-                shutil.copytree(cache_path, dest, ignore=shutil.ignore_patterns(".git"))
+                # symlinks=True copies a link as a link. The default copies its
+                # target's content as a regular file, which hid the link from
+                # the processing walk that refuses symlinks (OP-259).
+                shutil.copytree(cache_path, dest, ignore=shutil.ignore_patterns(".git"), symlinks=True)
                 return dest
         finally:
             fcntl.flock(lock_file, fcntl.LOCK_UN)

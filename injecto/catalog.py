@@ -68,6 +68,10 @@ LEGACY_PATHS_FILE = Path('catalog') / 'legacy-paths.txt'
 # because renaming it would change substitution for every deployed template.
 BARE_SECTION_SERVICES = frozenset({'vpc'})
 
+# A provider is a directory name under templates/terraform/, never a path: the
+# /catalog query parameter is joined onto the clone as given (OP-259).
+PROVIDER_RE = re.compile(r'[a-z0-9_-]+')
+
 _NUMBER_RE = re.compile(r'^-?\d+(?:\.\d+)?$')
 _QUOTED_BOOL_RE = re.compile(r'^"(?:true|false)"$', re.IGNORECASE)
 
@@ -350,8 +354,12 @@ def extract_catalog(repo_root, provider: str = 'aws') -> dict:
     decides whether errors are fatal. Callers that need a guarantee should check
     ``errors`` rather than trusting a non-empty ``services``.
     """
+    if not PROVIDER_RE.fullmatch(provider):
+        raise ValueError(f"Invalid provider {provider!r}: expected [a-z0-9_-]+")
     repo_root = Path(repo_root)
     provider_dir = repo_root / 'templates' / 'terraform' / provider
+    if not provider_dir.resolve().is_relative_to(repo_root.resolve()):
+        raise ValueError(f"Provider directory {provider_dir} resolves outside the repository")
     collector = _Collector()
 
     catalog = {

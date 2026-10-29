@@ -18,12 +18,13 @@ SERVICE = "injecto"
 # API middleware). Included in every log line emitted while handling that request.
 request_id_var = contextvars.ContextVar("request_id", default=None)
 
-# Defence-in-depth: mask user:pass@ credentials in any logged string.
-_URL_CREDENTIALS_RE = re.compile(r"://[^/\s:@]+:[^/\s@]+@")
+# Defence-in-depth: mask URL credentials (user:pass@ or a bare token@) in any
+# logged string. Same pattern as git.mask_url_credentials.
+_URL_CREDENTIALS_RE = re.compile(r"://[^/\s]+@")
 
 
 def _mask(text: str) -> str:
-    return _URL_CREDENTIALS_RE.sub("://***:***@", text)
+    return _URL_CREDENTIALS_RE.sub("://***@", text)
 
 
 # Normalise Python level names to the backend's vocabulary (info/warn/error/debug).

@@ -288,12 +288,14 @@ curl http://localhost:8000/health
 
 #### Process Git Repository
 
+`repo_url` must be an `https` URL under an owner listed in `CATALOG_REPO_ALLOWLIST` (the chart default allows `https://github.com/devopsgroupeu/`). Any other URL is refused with `400`; an unset allowlist disables cloning with `503`. `input_dir` must be a relative path inside the repository.
+
 ```bash
 curl -X POST http://localhost:8000/process \
   -H "Content-Type: application/json" \
   -d '{
     "source": "git",
-    "repo_url": "https://github.com/example/configs.git",
+    "repo_url": "https://github.com/devopsgroupeu/openprime-infra-templates.git",
     "input_dir": "templates/",
     "data": {
       "database": {
@@ -314,7 +316,7 @@ curl -X POST http://localhost:8000/process-git-download \
   -H "Content-Type: application/json" \
   -d '{
     "source": "git",
-    "repo_url": "https://github.com/example/configs.git",
+    "repo_url": "https://github.com/devopsgroupeu/openprime-infra-templates.git",
     "input_dir": "templates/",
     "data": {
       "environment": "production",
