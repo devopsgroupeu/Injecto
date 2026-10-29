@@ -241,6 +241,13 @@ injecto:
   extraArgs: []
     # - "--debug"
 
+# Shared token the backend sends as X-Service-Token. Injecto refuses to start
+# without one; name the Secret that holds it here, or set SERVICE_TOKEN in env.
+# INJECTO_AUTH_DISABLED=true in env runs without a token (local dev only).
+serviceToken:
+  existingSecret: ""
+  secretKey: SERVICE_TOKEN
+
 # Network policy — restrict who can reach Injecto (defense-in-depth alongside the
 # X-Service-Token auth). Enable in prod GitOps. Ingress-only, so Injecto keeps
 # egress for git clone / DNS.

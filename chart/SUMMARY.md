@@ -194,6 +194,7 @@ curl https://injecto.example.com/health
 ### Process Configuration
 ```bash
 curl -X POST http://localhost:8000/process \
+  -H "X-Service-Token: $SERVICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"source": "git", "repo_url": "...", "data": {...}}'
 ```

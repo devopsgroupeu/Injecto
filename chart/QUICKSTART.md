@@ -71,6 +71,7 @@ Expected response:
 
 ```bash
 curl -X POST http://localhost:8000/process \
+  -H "X-Service-Token: $SERVICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "git",
@@ -118,6 +119,7 @@ EOF
 
 # Process the files
 curl -X POST http://localhost:8000/process-upload \
+  -H "X-Service-Token: $SERVICE_TOKEN" \
   -F "files=@sample-template.yaml" \
   -F "config_files=@config-data.yaml" \
   -o result.zip

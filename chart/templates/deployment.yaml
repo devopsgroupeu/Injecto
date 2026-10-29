@@ -76,6 +76,13 @@ spec:
         resources:
           {{- toYaml .Values.resources | nindent 12 }}
         env:
+          {{- with .Values.serviceToken.existingSecret }}
+          - name: SERVICE_TOKEN
+            valueFrom:
+              secretKeyRef:
+                name: {{ . }}
+                key: {{ $.Values.serviceToken.secretKey }}
+          {{- end }}
           {{- with .Values.env }}
           {{- toYaml . | nindent 10 }}
           {{- end }}

@@ -197,6 +197,7 @@ curl http://localhost:8000/health
 
 # Process Git repository (example)
 curl -X POST http://localhost:8000/process \
+  -H "X-Service-Token: $SERVICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "git",

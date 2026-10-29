@@ -69,6 +69,14 @@ docker run --rm \
     --data-files /data/00_base.yaml /data/10_override.yaml
 ```
 
+### API
+
+```sh
+docker run --rm -p 8000:8000 -e SERVICE_TOKEN=<token> ghcr.io/devopsgroupeu/injecto:latest --api
+```
+
+The API refuses to start without `SERVICE_TOKEN`, and every endpoint except `/health` requires it in the `X-Service-Token` header. For local development only, `INJECTO_AUTH_DISABLED=true` runs it without a token.
+
 ## 📜 License
 
 ```plain
