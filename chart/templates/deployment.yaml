@@ -106,7 +106,8 @@ spec:
       volumes:
       # EmptyDir for temporary file processing
       - name: tmp-dir
-        emptyDir: {}
+        emptyDir:
+          {{- toYaml (.Values.tmpDir | default dict) | nindent 10 }}
       {{- with .Values.volumes }}
       {{- toYaml . | nindent 8 }}
       {{- end }}

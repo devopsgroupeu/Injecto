@@ -77,6 +77,8 @@ docker run --rm -p 8000:8000 -e SERVICE_TOKEN=<token> ghcr.io/devopsgroupeu/inje
 
 The API refuses to start without `SERVICE_TOKEN`, and every endpoint except `/health` requires it in the `X-Service-Token` header. For local development only, `INJECTO_AUTH_DISABLED=true` runs it without a token.
 
+Each request is bounded: a body over `MAX_REQUEST_BYTES` (default 10 MiB) answers `413`, as does an upload of more than `MAX_UPLOAD_FILES` files (default 500), and a body without a `Content-Length` answers `411`. The templates cache keeps at most `TEMPLATES_CACHE_MAX_ENTRIES` repository and branch pairs (default 8) and evicts the least recently used.
+
 ## 📜 License
 
 ```plain

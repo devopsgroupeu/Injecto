@@ -141,6 +141,7 @@ The following table lists the key configurable parameters of the Injecto chart a
 | `podSecurityContext.fsGroup` | Filesystem group | `1000` |
 | `securityContext.readOnlyRootFilesystem` | Read-only root filesystem | `true` |
 | `securityContext.allowPrivilegeEscalation` | Allow privilege escalation | `false` |
+| `tmpDir` | `emptyDir` spec of the writable `/tmp` volume; the pod is evicted when it outgrows `sizeLimit` | `{sizeLimit: 1Gi}` |
 
 #### Injecto-Specific Configuration
 
