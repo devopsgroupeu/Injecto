@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.2](https://github.com/devopsgroupeu/Injecto/compare/v0.13.1...v0.13.2) (2026-10-29)
+
+### 🐛 Bug Fixes
+
+* **api:** run blocking processing handlers in the threadpool so they cannot stall the event loop (OP-264) ([#34](https://github.com/devopsgroupeu/Injecto/issues/34)) ([c6e95ed](https://github.com/devopsgroupeu/Injecto/commit/c6e95edeb426bdd863760125ab3a97824024d62a))
+
 ## [0.13.1](https://github.com/devopsgroupeu/Injecto/compare/v0.13.0...v0.13.1) (2026-10-29)
 
 ### 🐛 Bug Fixes
