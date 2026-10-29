@@ -75,6 +75,8 @@ docker run --rm \
 docker run --rm -p 8000:8000 -e SERVICE_TOKEN=<token> ghcr.io/devopsgroupeu/injecto:latest --api
 ```
 
+The interactive docs (`/docs`, `/redoc`) and the OpenAPI schema (`/openapi.json`) are off unless `INJECTO_DOCS_ENABLED=true`, which is meant for local development.
+
 The API refuses to start without `SERVICE_TOKEN`, and every endpoint except `/health` requires it in the `X-Service-Token` header. For local development only, `INJECTO_AUTH_DISABLED=true` runs it without a token.
 
 ## 📜 License

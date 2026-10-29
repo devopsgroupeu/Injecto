@@ -136,6 +136,7 @@ The following table lists the key configurable parameters of the Injecto chart a
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
+| `serviceAccount.automount` | Mount a Kubernetes API token into the pod (Injecto never calls the API) | `false` |
 | `podSecurityContext.runAsNonRoot` | Run as non-root | `true` |
 | `podSecurityContext.runAsUser` | User ID | `1000` |
 | `podSecurityContext.fsGroup` | Filesystem group | `1000` |
