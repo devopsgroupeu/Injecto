@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.4](https://github.com/devopsgroupeu/Injecto/compare/v0.13.3...v0.13.4) (2026-10-29)
+
+### 🐛 Bug Fixes
+
+* **auth:** refuse to start or serve without a service token unless explicitly disabled (OP-260) ([#33](https://github.com/devopsgroupeu/Injecto/issues/33)) ([1a45933](https://github.com/devopsgroupeu/Injecto/commit/1a45933bcfd72397b26a7daa256ad2a8905d3e13))
+
 ## [0.13.3](https://github.com/devopsgroupeu/Injecto/compare/v0.13.2...v0.13.3) (2026-10-29)
 
 ### 🐛 Bug Fixes
