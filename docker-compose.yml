@@ -20,7 +20,7 @@ services:
       - 8000:8000
     environment:
       # The API refuses to start without a token; send it as X-Service-Token.
-      SERVICE_TOKEN: ${SERVICE_TOKEN:-local-dev-service-token}
+      SERVICE_TOKEN: ${SERVICE_TOKEN:-openprime-local-dev-token}
     command: >
       --api
       --host 0.0.0.0
