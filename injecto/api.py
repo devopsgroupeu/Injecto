@@ -25,17 +25,19 @@ from .formatting import run_terraform_fmt
 from .catalog import extract_catalog
 from .git import clone_repository, get_cached_templates, mask_url_credentials
 from .version import __version__
-from .auth import require_service_token
+from .auth import check_auth_configured, require_service_token
 from .metrics import metrics_middleware, start_metrics_server
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    """Start the metrics listener in the process that serves requests.
+    """Refuse to start without auth configured (OP-260), then start the metrics
+    listener in the process that serves requests.
 
     Not in run_api_server(): under uvicorn --reload that process only
     supervises, so a listener started there would expose an empty registry.
     """
+    check_auth_configured()
     start_metrics_server()
     yield
 

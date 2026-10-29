@@ -151,6 +151,10 @@ The following table lists the key configurable parameters of the Injecto chart a
 | `injecto.api.port` | API port | `8000` |
 | `injecto.api.debug` | Enable debug mode | `false` |
 | `injecto.extraArgs` | Additional CLI arguments | `[]` |
+| `serviceToken.existingSecret` | Secret holding the shared `SERVICE_TOKEN`; Injecto refuses to start without a token | `""` |
+| `serviceToken.secretKey` | Key of the token in that Secret | `SERVICE_TOKEN` |
+
+Injecto fails closed: with no `SERVICE_TOKEN` (from `serviceToken.existingSecret` or set directly in `env`) the pod refuses to start. `INJECTO_AUTH_DISABLED=true` in `env` runs without a token, for local development only.
 
 ### Example Configurations
 
@@ -272,6 +276,8 @@ curl https://injecto.example.com/health
 
 ### API Endpoints
 
+Every endpoint except `/health` requires the `X-Service-Token` header carrying the configured token.
+
 #### Health Check
 
 ```bash
@@ -290,6 +296,7 @@ curl http://localhost:8000/health
 
 ```bash
 curl -X POST http://localhost:8000/process \
+  -H "X-Service-Token: $SERVICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "git",
@@ -311,6 +318,7 @@ curl -X POST http://localhost:8000/process \
 
 ```bash
 curl -X POST http://localhost:8000/process-git-download \
+  -H "X-Service-Token: $SERVICE_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
     "source": "git",
@@ -328,6 +336,7 @@ curl -X POST http://localhost:8000/process-git-download \
 
 ```bash
 curl -X POST http://localhost:8000/process-upload \
+  -H "X-Service-Token: $SERVICE_TOKEN" \
   -F "files=@template1.yaml" \
   -F "files=@template2.tf" \
   -F "config_files=@config.yaml" \

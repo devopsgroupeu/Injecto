@@ -45,6 +45,7 @@ Injecto has been deployed successfully!
 
   # Process Git repository
   curl -X POST http://localhost:8080/process \
+    -H "X-Service-Token: $SERVICE_TOKEN" \
     -H "Content-Type: application/json" \
     -d '{
       "source": "git",
