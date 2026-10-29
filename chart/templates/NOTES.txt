@@ -48,7 +48,7 @@ Injecto has been deployed successfully!
     -H "Content-Type: application/json" \
     -d '{
       "source": "git",
-      "repo_url": "https://github.com/example/configs.git",
+      "repo_url": "https://github.com/devopsgroupeu/openprime-infra-templates.git",
       "input_dir": "templates/",
       "data": {"key": "value"}
     }'

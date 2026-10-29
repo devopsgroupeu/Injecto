@@ -206,6 +206,11 @@ env:
   # readOnlyRootFilesystem) — ephemeral per pod, shared across requests.
   - name: TEMPLATES_CACHE_DIR
     value: "/tmp/injecto-templates-cache"
+  # Comma-separated https://<host>/<owner>/ entries every cloning endpoint
+  # (/process, /process-git-download, /catalog) is limited to. Unset disables
+  # cloning (503) instead of allowing any URL.
+  - name: CATALOG_REPO_ALLOWLIST
+    value: "https://github.com/devopsgroupeu/"
   # - name: LOG_LEVEL
   #   value: "info"
   # - name: DEBUG

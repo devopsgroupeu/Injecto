@@ -11,6 +11,7 @@ import io
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import List, Optional, Dict, Any
+from urllib.parse import unquote, urlsplit
 
 import uuid
 
@@ -22,7 +23,7 @@ import yaml
 from .logs import logger, green, yellow, red, request_id_var
 from .processing import GenerationError, load_and_merge_data, process_files
 from .formatting import run_terraform_fmt
-from .catalog import extract_catalog
+from .catalog import PROVIDER_RE, extract_catalog
 from .git import clone_repository, get_cached_templates, mask_url_credentials
 from .version import __version__
 from .auth import require_service_token
@@ -207,6 +208,7 @@ def generate_from_git(request: ProcessRequest, temp_dir: Path, use_cache: bool =
     """
     if not request.repo_url:
         raise HTTPException(status_code=400, detail="repo_url is required when source is 'git'")
+    require_allowed_repo(request.repo_url)
 
     if use_cache:
         # The cached path can fail in several ways (clone refused, fetch/reset
@@ -229,10 +231,22 @@ def generate_from_git(request: ProcessRequest, temp_dir: Path, use_cache: bool =
             repo_url=request.repo_url,
             clone_path=str(clone_path),
             branch=request.branch,
+            # Same bounds as the cached path and /catalog: a large or stalled
+            # remote must not hold the request open indefinitely (OP-259).
+            depth=1,
+            timeout=60,
         ):
             raise HTTPException(status_code=400, detail="Failed to clone repository")
 
-    input_dir = clone_path / request.input_dir
+    # input_dir comes from the caller: `..` or an absolute path (which replaces
+    # the base outright) would process and return files from outside the clone,
+    # and resolve() also catches a directory the repository symlinks out of it
+    # (OP-259).
+    requested = Path(request.input_dir)
+    base = clone_path.resolve()
+    input_dir = (base / requested).resolve()
+    if requested.is_absolute() or ".." in requested.parts or not input_dir.is_relative_to(base):
+        raise HTTPException(status_code=400, detail="input_dir must be a relative path inside the repository")
     if not input_dir.exists():
         raise HTTPException(status_code=400, detail=f"Input directory '{request.input_dir}' not found in repository")
 
@@ -386,10 +400,12 @@ if __name__ == "__main__":
 
 # --- Catalog endpoint ------------------------------------------------------
 
-# Injecto clones whatever repo it is handed, so the catalog endpoint is a
+# Injecto clones whatever repo it is handed, so every cloning endpoint is a
 # server-side request forgery primitive unless the target is constrained. The
-# allowlist holds URL prefixes; empty means the endpoint is disabled rather
-# than unrestricted, because an unset variable must never be the permissive case.
+# allowlist holds `https://<host>/<owner>[/...]` entries and, despite its name,
+# governs /process and /process-git-download as well as /catalog (OP-259);
+# empty means cloning is disabled rather than unrestricted, because an unset
+# variable must never be the permissive case.
 CATALOG_REPO_ALLOWLIST = [
     prefix.strip()
     for prefix in os.getenv("CATALOG_REPO_ALLOWLIST", "").split(",")
@@ -407,8 +423,65 @@ _sha_cache: Dict[tuple, tuple] = {}
 _catalog_cache: Dict[tuple, tuple] = {}
 
 
+def _repo_url_parts(url: str):
+    """Return (host, port, path segments) of a plain https URL, or None.
+
+    The path is percent-decoded once before it is split, so `%2e%2e` and `%2f`
+    are judged as the `..` and `/` a server decodes them to; a `%` that survives
+    that (double encoding) is refused. So is any `.` or `..` segment: git sends
+    them as written and the server resolves them, which is how
+    `https://github.com/<owner>/../attacker/repo` fetched /attacker/repo.
+    """
+    # urlsplit silently drops tabs and newlines that git would keep, and some
+    # URL parsers treat a backslash as a separator; neither belongs in a repo URL.
+    if any(c.isspace() or not c.isprintable() or c == "\\" for c in url):
+        return None
+    try:
+        parts = urlsplit(url)
+        port = parts.port
+    except ValueError:
+        return None
+    # "@" anywhere in the authority is userinfo: credentials, or a host
+    # disguised as one (https://github.com@attacker.io/...).
+    if parts.scheme != "https" or not parts.hostname or "@" in parts.netloc or parts.query or parts.fragment:
+        return None
+    path = unquote(parts.path)
+    segments = [segment for segment in path.split("/") if segment]
+    if "%" in path or "\\" in path or any(segment in (".", "..") for segment in segments):
+        return None
+    return parts.hostname, port, segments
+
+
 def repo_is_allowed(repo_url: str) -> bool:
-    return any(repo_url.startswith(prefix) for prefix in CATALOG_REPO_ALLOWLIST)
+    """True when repo_url names the host, port and owner of an allowlist entry.
+
+    Compared parsed and per path segment, not as a string prefix: the prefix
+    match let `https://github.com/devopsgroupeu-evil/...` through an entry
+    without a trailing slash, and the dot-segment form through either.
+    """
+    candidate = _repo_url_parts(repo_url)
+    if candidate is None:
+        return False
+    host, port, segments = candidate
+    for entry in CATALOG_REPO_ALLOWLIST:
+        allowed = _repo_url_parts(entry)
+        # An entry must name an owner: a bare host would allow every repo on it.
+        if not allowed or not allowed[2]:
+            continue
+        if (host, port) == allowed[:2] and segments[:len(allowed[2])] == allowed[2]:
+            return True
+    return False
+
+
+def require_allowed_repo(repo_url: str):
+    """Refuse a clone of anything outside the allowlist, on every endpoint that clones."""
+    if not CATALOG_REPO_ALLOWLIST:
+        raise HTTPException(
+            status_code=503,
+            detail="Cloning is not configured (CATALOG_REPO_ALLOWLIST is unset)",
+        )
+    if not repo_is_allowed(repo_url):
+        raise HTTPException(status_code=400, detail="repo_url is not in the repository allowlist")
 
 
 def resolve_remote_sha(repo_url: str, branch: str) -> Optional[str]:
@@ -463,13 +536,9 @@ def get_catalog(
     The ETag is the templates commit sha, so a frontend that already holds the
     current catalog revalidates for the cost of one ls-remote.
     """
-    if not CATALOG_REPO_ALLOWLIST:
-        raise HTTPException(
-            status_code=503,
-            detail="Catalog extraction is not configured (CATALOG_REPO_ALLOWLIST is unset)",
-        )
-    if not repo_is_allowed(repo_url):
-        raise HTTPException(status_code=400, detail="repo_url is not in the catalog allowlist")
+    require_allowed_repo(repo_url)
+    if not PROVIDER_RE.fullmatch(provider):
+        raise HTTPException(status_code=400, detail="provider must match [a-z0-9_-]+")
 
     sha = resolve_remote_sha(repo_url, branch)
     if not sha:
