@@ -573,3 +573,24 @@ def test_a_module_says_nothing_about_availability_by_default(tmp_path):
     catalog = extract_catalog(build_templates(tmp_path, tfvars))
 
     assert 'available' not in catalog['services']['eks']
+
+
+# --- provider is a directory name, not a path (OP-259) -----------------------
+
+
+@pytest.mark.parametrize("provider", ["../../..", "aws/../..", "/etc", "AWS", ""])
+def test_extract_catalog_rejects_a_provider_that_is_not_a_plain_name(tmp_path, provider):
+    with pytest.raises(ValueError, match="provider"):
+        extract_catalog(build_templates(tmp_path, MINIMAL_TFVARS), provider)
+
+
+def test_extract_catalog_refuses_a_provider_directory_linked_outside_the_repo(tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "terraform.auto.tfvars").write_text(MINIMAL_TFVARS)
+    repo = tmp_path / "repo"
+    (repo / "templates" / "terraform").mkdir(parents=True)
+    (repo / "templates" / "terraform" / "aws").symlink_to(outside)
+
+    with pytest.raises(ValueError, match="outside"):
+        extract_catalog(repo, "aws")

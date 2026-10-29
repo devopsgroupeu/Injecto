@@ -375,8 +375,10 @@ def test_mismatched_section_end_warns_and_leaves_the_stack_alone(tmp_path, caplo
         ("plain", '"plain"'),
         ("", '""'),
         ("a:b", '"a:b"'),
-        ('"already"', '"already"'),  # pre-quoted values pass through untouched
-        ("'single'", "'single'"),
+        # Escaped like any other string. The pre-quoted passthrough this used
+        # to pin let a quoted value carry raw code into the output (OP-259).
+        ('"already"', '"\\"already\\""'),
+        ("'single'", '"\'single\'"'),
         (True, "true"),
         (False, "false"),
         (0, "0"),
@@ -423,6 +425,68 @@ def test_a_quoted_value_still_survives_the_round_trip_into_a_file(tmp_path):
     out = run(tmp_path, {"main.tf": template}, {"cfg": {"description": 'say "hi"'}})["main.tf"]
     assert out.splitlines()[1] == 'description = "say \\"hi\\""'
     assert len(out.splitlines()) == 2  # the value did not break the line
+
+
+# --- Injection through wizard values (OP-259) ---
+
+HCL_PAYLOAD = '"x"\nresource "aws_iam_user" "pwn" { name = "y" }\n#"'
+YAML_PAYLOAD = '"x"\nadmin: true\n"'
+
+
+def test_a_quoted_value_cannot_inject_terraform(tmp_path):
+    """A value that starts and ends with a quote used to be written verbatim,
+    so its newlines became new lines of Terraform with the customer's AWS rights."""
+    template = '# @param cfg.name\nname = "old"\n'
+    out = run(tmp_path, {"main.tf": template}, {"cfg": {"name": HCL_PAYLOAD}})["main.tf"]
+
+    assert len(out.splitlines()) == 2
+    assert not any(line.startswith("resource") for line in out.splitlines())
+
+
+def test_a_quoted_value_cannot_inject_a_yaml_key(tmp_path):
+    template = "# @param cfg.name\nname: old\n"
+    out = run(tmp_path, {"values.yaml": template}, {"cfg": {"name": YAML_PAYLOAD}})["values.yaml"]
+
+    assert len(out.splitlines()) == 2
+    assert not any(line.startswith("admin") for line in out.splitlines())
+
+
+@pytest.mark.parametrize("name", ["main.tf", "terraform.auto.tfvars"])
+def test_template_sequences_are_inert_in_terraform(tmp_path, name):
+    """A quoted HCL string is a template: `${...}` runs an expression and
+    `%{...}` a directive. `$${` and `%%{` are their literal forms."""
+    template = "# @param cfg.name\nname = \"old\"\n# @param cfg.tags\ntags = []\n"
+    data = {"cfg": {"name": '${file("/etc/passwd")}%{if true}x%{endif}', "tags": ["${path.cwd}"]}}
+    out = run(tmp_path, {name: template}, data)[name]
+
+    assert out.splitlines()[1] == 'name = "$${file(\\"/etc/passwd\\")}%%{if true}x%%{endif}"'
+    assert out.splitlines()[3] == 'tags = ["$${path.cwd}"]'
+
+
+def test_template_sequences_are_left_alone_in_yaml(tmp_path):
+    """YAML has no template syntax, so doubling the `$` would change the value."""
+    template = "# @param cfg.name\nname: old\n"
+    out = run(tmp_path, {"values.yaml": template}, {"cfg": {"name": "${not-a-template}"}})["values.yaml"]
+
+    assert out.splitlines()[1] == 'name: "${not-a-template}"'
+
+
+def test_a_symlink_in_the_templates_is_refused_not_followed(tmp_path):
+    """copy2 and open() follow a link, so `values.yaml -> /proc/self/environ` in a
+    templates repo would ship Injecto's environment to the customer."""
+    secret = tmp_path / "secret.txt"
+    secret.write_text("SERVICE_TOKEN=leaked\n")
+    input_dir = tmp_path / "in"
+    input_dir.mkdir()
+    (input_dir / "main.tf").write_text('x = "1"\n')
+    (input_dir / "values.yaml").symlink_to(secret)
+    output_dir = tmp_path / "out"
+
+    with pytest.raises(ValueError, match="Symlinks are not allowed"):
+        process_files(input_dir, output_dir, {})
+
+    leaked = [p for p in output_dir.rglob("*") if p.is_file() and "leaked" in p.read_text()]
+    assert not leaked
 
 
 # --- deep_merge (OP-192) ---

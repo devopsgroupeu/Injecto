@@ -5,12 +5,12 @@ from injecto.git import mask_url_credentials
 
 def test_masks_user_and_pat_in_https_url():
     url = "https://alice:ghp_secretpat@github.com/org/repo.git"
-    assert mask_url_credentials(url) == "https://***:***@github.com/org/repo.git"
+    assert mask_url_credentials(url) == "https://***@github.com/org/repo.git"
 
 
 def test_masks_credentials_inside_a_command_string():
     cmd = "git clone --branch main https://u:p@host/x.git /tmp/x"
-    assert mask_url_credentials(cmd) == "git clone --branch main https://***:***@host/x.git /tmp/x"
+    assert mask_url_credentials(cmd) == "git clone --branch main https://***@host/x.git /tmp/x"
 
 
 def test_leaves_credential_free_url_untouched():
@@ -83,7 +83,7 @@ def test_a_failed_clone_does_not_log_the_pat(monkeypatch, tmp_path, caplog):
 
     logged = caplog.text
     assert 'ghp_secretpat' not in logged
-    assert '***:***' in logged
+    assert '://***@' in logged
 
 
 def test_a_failed_clone_surfaces_git_stderr(monkeypatch, tmp_path, caplog):
@@ -297,3 +297,44 @@ def test_snapshot_dest_receives_the_tree_without_git(monkeypatch, tmp_path):
     assert not (dest / "stale.txt").exists(), "a pre-existing dest must be cleared"
     assert not (dest / ".git").exists()
     assert (cache_path / ".git").exists()
+
+
+# --- Hardening (OP-259) ------------------------------------------------------
+
+
+def test_masks_a_token_given_as_the_whole_userinfo():
+    """GitHub and GitLab PATs are usually written https://<token>@host, with no
+    colon, which the user:pass pattern never matched."""
+    url = "https://ghp_secretpat@github.com/org/repo.git"
+    assert "ghp_secretpat" not in mask_url_credentials(url)
+
+
+def test_the_log_formatter_masks_a_bare_token_too():
+    from injecto.logs import _mask
+
+    assert "ghp_secretpat" not in _mask("cloning https://ghp_secretpat@github.com/org/repo.git")
+
+
+def test_a_branch_name_cannot_inject_fetch_options(tmp_path):
+    """Without `--`, git parses a branch beginning with '-' as an option of
+    fetch, and --upload-pack runs an arbitrary command. Exercised against real
+    git so the test proves the option is not interpreted, not that a list
+    contains a string."""
+    remote = tmp_path / "remote"
+    remote.mkdir()
+    _init_real_repo(remote)
+    marker = tmp_path / "pwned"
+    branch = f"--upload-pack=touch {marker};"
+    repo_url = str(remote)
+
+    cache_dir = tmp_path / "cache"
+    cache_key = hashlib.sha256(f"{repo_url}|{branch}".encode("utf-8")).hexdigest()[:16]
+    subprocess.run(
+        ["git", "clone", "-q", "--", repo_url, str(cache_dir / cache_key)],
+        check=True, capture_output=True,
+    )
+
+    with pytest.raises(subprocess.CalledProcessError):
+        get_cached_templates(repo_url, branch, cache_dir=str(cache_dir))
+
+    assert not marker.exists()
