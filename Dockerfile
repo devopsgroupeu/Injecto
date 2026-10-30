@@ -1,5 +1,7 @@
-# Use a slim Python image for a smaller footprint
-FROM python:3.13-slim
+# Use a slim Python image for a smaller footprint. Pinned by digest (the
+# multi-arch index), so a rebuild uses exactly this image until it is bumped on
+# purpose; the tag alone would follow whatever is pushed under it (OP-191).
+FROM python:3.13-slim@sha256:2d44738ebf4ce5f63b9d9ea871e9c7cfdc0426f7b0c97cac915fd88ded1d86bb
 
 # The release version, passed in by the publish workflow. It is not just a
 # label: it is written into the package below so /health and the OpenAPI docs
@@ -18,10 +20,27 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 # Set the working directory inside the container
 WORKDIR /app
 
+# Terraform for `terraform fmt`. The checksums are the linux lines of
+# HashiCorp's terraform_<version>_SHA256SUMS, whose signature was verified
+# against HashiCorp's release key when they were pinned. Pinning them here,
+# rather than downloading SHA256SUMS next to the zip, means a tampered or
+# swapped download fails the build instead of being checked against a file from
+# the same host (OP-191). Bump all three together.
+ARG TERRAFORM_VERSION=1.11.4
+ARG TERRAFORM_SHA256_AMD64=1ce994251c00281d6845f0f268637ba50c0005657eb3cf096b92f753b42ef4dc
+ARG TERRAFORM_SHA256_ARM64=a43d1d0da9b9bab214a8305a39db0e40869572594ccf50c416a7756499143633
+
 # Install git for repository cloning and terraform for formatting
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git wget unzip && \
-    wget -qO /tmp/terraform.zip "https://releases.hashicorp.com/terraform/1.11.4/terraform_1.11.4_linux_$(dpkg --print-architecture).zip" && \
+    arch="$(dpkg --print-architecture)" && \
+    case "$arch" in \
+      amd64) sha256="$TERRAFORM_SHA256_AMD64" ;; \
+      arm64) sha256="$TERRAFORM_SHA256_ARM64" ;; \
+      *) echo "No pinned Terraform checksum for $arch" >&2; exit 1 ;; \
+    esac && \
+    wget -qO /tmp/terraform.zip "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${arch}.zip" && \
+    echo "${sha256}  /tmp/terraform.zip" | sha256sum -c - && \
     unzip -o /tmp/terraform.zip -d /usr/local/bin && \
     rm /tmp/terraform.zip && \
     apt-get purge -y wget unzip && \
