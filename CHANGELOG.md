@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.5](https://github.com/devopsgroupeu/Injecto/compare/v0.13.4...v0.13.5) (2026-10-30)
+
+### 🐛 Bug Fixes
+
+* bound the templates cache, request bodies and the result ZIP (OP-259) ([#37](https://github.com/devopsgroupeu/Injecto/issues/37)) ([46df22a](https://github.com/devopsgroupeu/Injecto/commit/46df22afdbcbd9645c5fa61db5da56953344a668))
+
 ## [0.13.4](https://github.com/devopsgroupeu/Injecto/compare/v0.13.3...v0.13.4) (2026-10-29)
 
 ### 🐛 Bug Fixes
