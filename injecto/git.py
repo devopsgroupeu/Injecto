@@ -15,6 +15,13 @@ from .logs import logger, green, yellow, red
 # anything is written to logs.
 _URL_CREDENTIALS_RE = re.compile(r"://[^/\s]+@")
 
+# The templates cache keeps one entry per repo URL + branch. Production uses one;
+# the bound stops a stream of distinct branches from filling the disk (OP-259).
+DEFAULT_CACHE_MAX_ENTRIES = 8
+# Entry directories are named by get_cached_templates' 16-hex-digit key. Eviction
+# touches nothing else, even if TEMPLATES_CACHE_DIR points at a shared directory.
+_CACHE_ENTRY_RE = re.compile(r"[0-9a-f]{16}")
+
 
 def mask_url_credentials(text):
     """Replace any userinfo (user:pass@ or token@) in a string with ://***@."""
@@ -131,6 +138,9 @@ def get_cached_templates(repo_url, branch, cache_dir=None, timeout=60, dest=None
     A per-key file lock serializes concurrent refreshes (multiple uvicorn
     workers or overlapping requests must not fetch/reset the same repo at once).
 
+    At most TEMPLATES_CACHE_MAX_ENTRIES entries are kept: a new clone evicts the
+    least recently used ones beyond that (see _evict_least_recently_used).
+
     A cache entry is only trusted when it is a real git working tree (it has a
     .git directory). A partial directory left behind by a clone that was killed
     by the timeout is wiped and re-cloned, so a poisoned cache can always
@@ -177,6 +187,8 @@ def get_cached_templates(repo_url, branch, cache_dir=None, timeout=60, dest=None
                     text=True,
                     timeout=timeout,
                 )
+                # The entry's mtime is its recency for eviction.
+                os.utime(cache_path)
             else:
                 if cache_path.exists():
                     # A non-empty directory without .git is debris from a clone
@@ -195,6 +207,13 @@ def get_cached_templates(repo_url, branch, cache_dir=None, timeout=60, dest=None
                     # cache key until the pod restarts.
                     shutil.rmtree(cache_path, ignore_errors=True)
                     raise RuntimeError(f"Failed to clone templates repository: {repo_url}")
+                _evict_least_recently_used(
+                    Path(cache_dir),
+                    keep=cache_key,
+                    max_entries=int(
+                        os.environ.get("TEMPLATES_CACHE_MAX_ENTRIES", DEFAULT_CACHE_MAX_ENTRIES)
+                    ),
+                )
             if dest is not None:
                 # Snapshot under the lock: the caller reads a private copy, so a
                 # concurrent refresh cannot reset the tree out from under it.
@@ -210,3 +229,37 @@ def get_cached_templates(repo_url, branch, cache_dir=None, timeout=60, dest=None
             fcntl.flock(lock_file, fcntl.LOCK_UN)
 
     return cache_path
+
+
+def _evict_least_recently_used(cache_dir, keep, max_entries):
+    """Remove the least recently used cache entries until max_entries remain.
+
+    Every new repo URL + branch used to add an entry that stayed for the life of
+    the pod (OP-259). An entry whose lock is held is in use by another request
+    and is skipped; the next eviction reconsiders it. Lock files are left in
+    place: unlinking one that a waiting request has already opened would let
+    two requests into the same entry.
+    """
+    entries = []
+    for path in cache_dir.iterdir():
+        if path.name == keep or not _CACHE_ENTRY_RE.fullmatch(path.name):
+            continue
+        try:
+            entries.append((path.stat().st_mtime, path))
+        except FileNotFoundError:
+            continue  # evicted concurrently
+    excess = len(entries) + 1 - max_entries
+    for _, path in sorted(entries):
+        if excess <= 0:
+            break
+        with open(cache_dir / f"{path.name}.lock", "w") as lock_file:
+            try:
+                fcntl.flock(lock_file, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                continue
+            try:
+                shutil.rmtree(path, ignore_errors=True)
+            finally:
+                fcntl.flock(lock_file, fcntl.LOCK_UN)
+        logger.info(f"Evicted cached templates: {path}")
+        excess -= 1

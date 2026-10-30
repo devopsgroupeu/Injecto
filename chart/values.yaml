@@ -180,6 +180,13 @@ autoscaling:
   # Target memory utilization percentage (optional)
   # targetMemoryUtilizationPercentage: 80
 
+# The emptyDir mounted at /tmp, the only writable path (the root filesystem is
+# read-only): per-request scratch dirs, uploads, result ZIPs and the templates
+# cache. With sizeLimit the kubelet evicts the pod when it outgrows the limit,
+# instead of one oversized request filling the node's disk.
+tmpDir:
+  sizeLimit: 1Gi
+
 # Additional volumes
 volumes: []
   # - name: temp-dir

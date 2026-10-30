@@ -7,7 +7,6 @@ import tempfile
 import shutil
 import time
 import zipfile
-import io
 from contextlib import asynccontextmanager, contextmanager
 from pathlib import Path
 from typing import List, Optional, Dict, Any
@@ -50,6 +49,36 @@ app = FastAPI(
     version=__version__,
     lifespan=lifespan,
 )
+
+# Upper bounds for one request (OP-259). JSON bodies are read whole by FastAPI
+# and the processing endpoints copy and zip whatever they receive, so without a
+# bound one request could exhaust the pod. The templates repo is ~200 KB in 52
+# files; these leave ample headroom.
+MAX_REQUEST_BYTES = int(os.getenv("MAX_REQUEST_BYTES", str(10 * 1024 * 1024)))
+MAX_UPLOAD_FILES = int(os.getenv("MAX_UPLOAD_FILES", "500"))
+
+
+# Registered before the other middlewares, so it runs inside them: a refused
+# request is still counted in the metrics and still gets its X-Request-ID.
+@app.middleware("http")
+async def request_size_limit(request: Request, call_next):
+    """Refuse a body over MAX_REQUEST_BYTES before any of it is read.
+
+    The declared Content-Length is a hard bound, because the server never reads
+    past it. A chunked body declares nothing, so it is refused rather than read
+    to find out.
+    """
+    length = request.headers.get("content-length")
+    if length is None:
+        if "chunked" in request.headers.get("transfer-encoding", "").lower():
+            return JSONResponse(status_code=411, content={"detail": "Content-Length is required"})
+    elif int(length) > MAX_REQUEST_BYTES:
+        return JSONResponse(
+            status_code=413,
+            content={"detail": f"Request body exceeds {MAX_REQUEST_BYTES} bytes"},
+        )
+    return await call_next(request)
+
 
 app.middleware("http")(metrics_middleware)
 
@@ -170,22 +199,42 @@ def processing_request(what: str):
             cleanup_temp_directory(temp_dir)
 
 
+ZIP_CHUNK_BYTES = 64 * 1024
+
+
 def create_zip_response(output_dir: Path) -> StreamingResponse:
-    """Create a zip file response from the output directory."""
-    zip_buffer = io.BytesIO()
+    """Zip the output directory into a temporary file and stream it back.
 
-    with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
-        for file_path in output_dir.rglob("*"):
-            if file_path.is_file():
-                relative_path = file_path.relative_to(output_dir)
-                zip_file.write(file_path, relative_path)
+    The archive used to be built in a BytesIO and copied once more, so every
+    response held twice its size in memory (OP-259). TemporaryFile has no name
+    on disk: its space is freed when it is closed, including when the client
+    disconnects mid-download, and the caller's scratch directory can be removed
+    before the response is sent.
+    """
+    archive = tempfile.TemporaryFile(prefix="injecto-zip-")
+    try:
+        with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for file_path in output_dir.rglob("*"):
+                if file_path.is_file():
+                    zip_file.write(file_path, file_path.relative_to(output_dir))
+        size = archive.seek(0, os.SEEK_END)
+        archive.seek(0)
+    except BaseException:
+        archive.close()
+        raise
 
-    zip_buffer.seek(0)
+    def chunks():
+        with archive:
+            while chunk := archive.read(ZIP_CHUNK_BYTES):
+                yield chunk
 
     return StreamingResponse(
-        io.BytesIO(zip_buffer.read()),
+        chunks(),
         media_type="application/zip",
-        headers={"Content-Disposition": "attachment; filename=processed_files.zip"}
+        headers={
+            "Content-Disposition": "attachment; filename=processed_files.zip",
+            "Content-Length": str(size),
+        },
     )
 
 # --- API Endpoints ---
@@ -308,6 +357,10 @@ def process_with_upload(
 
     Returns a zip file with processed results.
     """
+    # The body is already bounded by MAX_REQUEST_BYTES; this bounds the work.
+    if len(files) + len(config_files) > MAX_UPLOAD_FILES:
+        raise HTTPException(status_code=413, detail=f"At most {MAX_UPLOAD_FILES} files per upload")
+
     with processing_request("upload processing") as temp_dir:
         # Parse YAML data - either from config_files or data parameter
         if config_files:
@@ -320,15 +373,14 @@ def process_with_upload(
                 # merged as YAML and their directory structure is never used, so the
                 # simplest safe form is also the correct one. The index keeps two
                 # uploads with the same basename from overwriting each other.
-                # .file is the underlying spooled file; a sync handler reads it
-                # directly instead of awaiting UploadFile.read().
-                config_content = config_file.file.read()
+                # .file is the underlying spooled file; a sync handler copies it
+                # in chunks instead of reading it whole into memory (OP-259).
                 safe_name = Path(config_file.filename or "").name
                 if not safe_name:
                     raise HTTPException(status_code=400, detail="Config upload is missing a filename")
                 temp_config_path = temp_dir / f"config_{index}_{safe_name}"
                 with open(temp_config_path, 'wb') as f:
-                    f.write(config_content)
+                    shutil.copyfileobj(config_file.file, f)
                 temp_config_files.append(temp_config_path)
 
             # Load and merge YAML files using existing logic
@@ -354,9 +406,8 @@ def process_with_upload(
             file_path = safe_upload_path(input_dir, file.filename)
             file_path.parent.mkdir(parents=True, exist_ok=True)
 
-            content = file.file.read()
             with open(file_path, 'wb') as f:
-                f.write(content)
+                shutil.copyfileobj(file.file, f)
 
         # Use the already processed/merged YAML data
         merged_data = yaml_data
