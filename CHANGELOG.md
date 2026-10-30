@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.7](https://github.com/devopsgroupeu/Injecto/compare/v0.13.6...v0.13.7) (2026-10-30)
+
+### 🐛 Bug Fixes
+
+* hide 500 internals, make API docs opt-in, validate X-Request-ID, no SA token (OP-270) ([#39](https://github.com/devopsgroupeu/Injecto/issues/39)) ([78e6e9f](https://github.com/devopsgroupeu/Injecto/commit/78e6e9f6407d5981863a255c3deaab5cd394bd85))
+
 ## [0.13.6](https://github.com/devopsgroupeu/Injecto/compare/v0.13.5...v0.13.6) (2026-10-30)
 
 ### 🐛 Bug Fixes
