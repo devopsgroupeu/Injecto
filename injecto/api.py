@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 import subprocess
 import tempfile
 import shutil
@@ -43,11 +44,18 @@ async def lifespan(_app: FastAPI):
 
 
 # --- FastAPI App Setup ---
+# /docs, /redoc and /openapi.json map every endpoint for anyone who can reach
+# the port, without a token, so they are for local development only (OP-270).
+# FastAPI serves the two UIs only alongside the schema, so this switch turns
+# off all three.
+DOCS_ENABLED = os.getenv("INJECTO_DOCS_ENABLED", "").lower() == "true"
+
 app = FastAPI(
     title="Injecto API",
     description="A REST API for processing configuration files with YAML data injection using @param and @section directives",
     version=__version__,
     lifespan=lifespan,
+    openapi_url="/openapi.json" if DOCS_ENABLED else None,
 )
 
 # Upper bounds for one request (OP-259). JSON bodies are read whole by FastAPI
@@ -83,11 +91,18 @@ async def request_size_limit(request: Request, call_next):
 app.middleware("http")(metrics_middleware)
 
 
+# The caller's id is echoed back and written into every log line, so only one
+# shaped like an id is adopted: the same rule the backend applies (OP-270).
+REQUEST_ID_RE = re.compile(r"[A-Za-z0-9-]{1,64}")
+
+
 @app.middleware("http")
 async def request_id_middleware(request: Request, call_next):
     """Bind the caller's X-Request-ID (or a new one) so it appears in every log
     line for this request and correlates with the backend and other services."""
-    request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:16]
+    request_id = request.headers.get("X-Request-ID", "")
+    if not REQUEST_ID_RE.fullmatch(request_id):
+        request_id = uuid.uuid4().hex[:16]
     token = request_id_var.set(request_id)
     try:
         response = await call_next(request)
@@ -191,8 +206,10 @@ def processing_request(what: str):
             detail={"code": e.code, "message": e.message, "details": e.details},
         ) from e
     except Exception as e:
+        # The cause goes to the log only: its text carries paths, commands and
+        # library internals the caller has no use for (OP-270).
         logger.error(red(f"API {what} error: {e}"), exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
+        raise HTTPException(status_code=500, detail="Processing failed")
 
     finally:
         if temp_dir:
