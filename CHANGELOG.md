@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.6](https://github.com/devopsgroupeu/Injecto/compare/v0.13.5...v0.13.6) (2026-10-30)
+
+### 🐛 Bug Fixes
+
+* **docker:** verify the Terraform download and pin the base image by digest (OP-191) ([#38](https://github.com/devopsgroupeu/Injecto/issues/38)) ([7ec264a](https://github.com/devopsgroupeu/Injecto/commit/7ec264a3c78d9df7e56e4e6c011b460672095a63))
+
 ## [0.13.5](https://github.com/devopsgroupeu/Injecto/compare/v0.13.4...v0.13.5) (2026-10-30)
 
 ### 🐛 Bug Fixes
