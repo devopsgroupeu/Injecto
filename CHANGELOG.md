@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.8](https://github.com/devopsgroupeu/Injecto/compare/v0.13.7...v0.13.8) (2026-11-03)
+
+### 🏗️ Build System
+
+* **deps:** bump python-multipart ([#54](https://github.com/devopsgroupeu/Injecto/issues/54)) ([c1348a0](https://github.com/devopsgroupeu/Injecto/commit/c1348a07565ad3c4e7feb71b698d6dd654bb21ff))
+
 ## [0.13.7](https://github.com/devopsgroupeu/Injecto/compare/v0.13.6...v0.13.7) (2026-10-30)
 
 ### 🐛 Bug Fixes
