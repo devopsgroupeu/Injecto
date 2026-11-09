@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.10](https://github.com/devopsgroupeu/Injecto/compare/v0.13.9...v0.13.10) (2026-11-09)
+
+### 🐛 Bug Fixes
+
+* **chart:** refuse to render without a service token (OP-270) ([#57](https://github.com/devopsgroupeu/Injecto/issues/57)) ([fd75204](https://github.com/devopsgroupeu/Injecto/commit/fd75204eb9c94246d4e511da251d43001dee54b9))
+
 ## [0.13.9](https://github.com/devopsgroupeu/Injecto/compare/v0.13.8...v0.13.9) (2026-11-09)
 
 ### 🏗️ Build System
