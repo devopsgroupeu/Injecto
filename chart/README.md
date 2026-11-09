@@ -156,7 +156,7 @@ The following table lists the key configurable parameters of the Injecto chart a
 | `serviceToken.existingSecret` | Secret holding the shared `SERVICE_TOKEN`; Injecto refuses to start without a token | `""` |
 | `serviceToken.secretKey` | Key of the token in that Secret | `SERVICE_TOKEN` |
 
-Injecto fails closed: with no `SERVICE_TOKEN` (from `serviceToken.existingSecret` or set directly in `env`) the pod refuses to start. `INJECTO_AUTH_DISABLED=true` in `env` runs without a token, for local development only.
+Injecto fails closed: with no `SERVICE_TOKEN` (from `serviceToken.existingSecret`, set directly in `env`, or via `envFrom`) the chart refuses to render, instead of producing a pod that would refuse to start. `INJECTO_AUTH_DISABLED=true` in `env` runs without a token, for local development only.
 
 ### Example Configurations
 

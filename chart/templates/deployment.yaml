@@ -1,3 +1,13 @@
+{{- /* The API refuses to start without a token (OP-260), so a release rendered
+     without one would only crashloop. Fail at render instead (OP-270). */ -}}
+{{- $hasToken := or .Values.serviceToken.existingSecret .Values.envFrom -}}
+{{- range .Values.env }}
+{{- if eq .name "SERVICE_TOKEN" }}{{ $hasToken = true }}{{ end }}
+{{- if and (eq .name "INJECTO_AUTH_DISABLED") (has (lower (toString .value)) (list "1" "true" "yes" "on")) }}{{ $hasToken = true }}{{ end }}
+{{- end }}
+{{- if not $hasToken }}
+{{- fail "Injecto needs a service token: set serviceToken.existingSecret, add SERVICE_TOKEN to env, or for local development only set INJECTO_AUTH_DISABLED=true in env" }}
+{{- end }}
 {{- if and .Values.metrics.enabled (eq (int .Values.metrics.port) (int .Values.service.targetPort)) }}
 {{- fail "metrics.port must differ from service.targetPort: the metrics listener and the API cannot share a port" }}
 {{- end }}
