@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.13.11](https://github.com/devopsgroupeu/Injecto/compare/v0.13.10...v0.13.11) (2026-11-13)
+
+### 🏗️ Build System
+
+* **deps:** bump python from `8c13a3f` to `65a65fc` ([#58](https://github.com/devopsgroupeu/Injecto/issues/58)) ([f991e2f](https://github.com/devopsgroupeu/Injecto/commit/f991e2fd0d99a4b051935087855b8f88d914fbbb))
+
 ## [0.13.10](https://github.com/devopsgroupeu/Injecto/compare/v0.13.9...v0.13.10) (2026-11-09)
 
 ### 🐛 Bug Fixes
