@@ -2,4 +2,3 @@
 # service token (OP-270); this points it at a Secret nobody reads at render time.
 serviceToken:
   existingSecret: ci-service-token
-ingress: "broken"
