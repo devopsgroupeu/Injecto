@@ -1,0 +1,9 @@
+# Runtime dependencies. Edit this file, then regenerate requirements.txt:
+#   pip-compile --generate-hashes --allow-unsafe requirements.in
+# (run it on Linux with Python 3.15; see README "Supply chain")
+PyYAML>=5.1
+colorama==0.4.6
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart==0.0.33
+prometheus-client>=0.20.0

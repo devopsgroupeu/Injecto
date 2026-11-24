@@ -1,0 +1,19 @@
+# CI only: the default values plus every optional template switched on,
+# so kubeconform validates all of them.
+serviceToken:
+  existingSecret: ci-service-token
+# A non-ClusterIP Service makes the chart render the separate metrics Service.
+service:
+  type: NodePort
+ingress:
+  enabled: true
+autoscaling:
+  enabled: true
+metrics:
+  enabled: true
+serviceMonitor:
+  enabled: true
+networkPolicy:
+  enabled: true
+podDisruptionBudget:
+  enabled: true

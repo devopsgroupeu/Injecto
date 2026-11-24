@@ -112,3 +112,30 @@ Read our [Code of Conduct](CODE_OF_CONDUCT.md) to understand the standards we up
 ## 🗂️ Changelog
 
 For a detailed history of changes, updates, and releases, please check out our [Changelog](CHANGELOG.md).
+
+## 🔏 Supply chain
+
+Every release image published to `ghcr.io/devopsgroupeu/injecto` carries:
+
+- a **keyless [cosign](https://github.com/sigstore/cosign) signature**, made by the release workflow with GitHub's OIDC identity (no long-lived signing key exists);
+- an **SBOM** (SPDX) and **build provenance**, attached to the image as attestations by BuildKit.
+
+Before a release is cut, CI builds the image from the same commit (linux/amd64) and scans it, together with the hash-pinned `requirements.txt`, with Trivy. A fixable HIGH or CRITICAL vulnerability stops the release. Pull requests run the same scan. The image also bundles Terraform (for `terraform fmt`); its version and per-arch checksums are pinned in the `Dockerfile`, so bump them there when Trivy flags the binary.
+
+Runtime dependencies live in `requirements.in`, test dependencies in `requirements-dev.in`. After editing either, regenerate the hash-pinned lock files on Linux with Python 3.15:
+
+```bash
+docker run --rm -v "$PWD":/src -w /src python:3.15-slim \
+  sh -c 'pip install -q pip-tools==7.7.0 \
+    && pip-compile --generate-hashes --allow-unsafe requirements.in \
+    && pip-compile --generate-hashes --allow-unsafe requirements-dev.in'
+```
+
+### Verify the signature
+
+Use cosign v3.1.4 or newer (the release workflow signs with v3.1.4):
+
+```bash
+cosign verify ghcr.io/devopsgroupeu/injecto:<version> \
+  --certificate-identity "https://github.com/devopsgroupeu/Injecto/.github/workflows/reusable-docker-publish.yml@refs/heads/main" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com

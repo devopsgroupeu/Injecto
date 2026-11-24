@@ -1,0 +1,7 @@
+# Test dependencies, constrained to the runtime lock so tests run against the
+# exact versions the image ships. Regenerate after requirements.txt:
+#   pip-compile --generate-hashes --allow-unsafe requirements-dev.in
+-c requirements.txt
+pytest>=8.0
+# FastAPI's TestClient needs an HTTP client
+httpx>=0.27

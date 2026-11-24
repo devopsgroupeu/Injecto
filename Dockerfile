@@ -17,6 +17,10 @@ LABEL org.opencontainers.image.source="https://github.com/devopsgroupeu/Injecto"
 LABEL org.opencontainers.image.authors="Andrej Rabek <andrej.rabek@devopsgroup.sk>"
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
+# No .pyc writes at runtime: the code is root-owned and the root filesystem can
+# be read-only, so Python could not write them anyway.
+ENV PYTHONDONTWRITEBYTECODE=1
+
 # Set the working directory inside the container
 WORKDIR /app
 
@@ -26,13 +30,20 @@ WORKDIR /app
 # rather than downloading SHA256SUMS next to the zip, means a tampered or
 # swapped download fails the build instead of being checked against a file from
 # the same host (OP-191). Bump all three together.
-ARG TERRAFORM_VERSION=1.11.4
-ARG TERRAFORM_SHA256_AMD64=1ce994251c00281d6845f0f268637ba50c0005657eb3cf096b92f753b42ef4dc
-ARG TERRAFORM_SHA256_ARM64=a43d1d0da9b9bab214a8305a39db0e40869572594ccf50c416a7756499143633
+# 1.11.4 was built with Go 1.23 and old x/crypto, x/net and grpc, which Trivy
+# reports as 57 fixable HIGH/CRITICAL findings in /usr/local/bin/terraform.
+ARG TERRAFORM_VERSION=1.17.2
+ARG TERRAFORM_SHA256_AMD64=e6f16b2f0b137ee5729caa8c4e79a3bae4ee261acd198a1fcfa8584a6296605b
+ARG TERRAFORM_SHA256_ARM64=858e08c181a76b6b223e8c767a8e983922eebe2d062db949a2de66ce040c368c
 
-# Install git for repository cloning and terraform for formatting
+# Install git for repository cloning and terraform for formatting.
+# zlib1g: Debian security fix the pinned base digest does not carry yet.
+#   CVE-2026-85091, fixed in 1:1.3.dfsg+really1.3.1-1+deb13u1.
+#   Remove `--only-upgrade zlib1g` once Dependabot bumps the digest to a
+#   rebuild that includes it.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends git wget unzip && \
+    apt-get install -y --no-install-recommends --only-upgrade zlib1g && \
     arch="$(dpkg --print-architecture)" && \
     case "$arch" in \
       amd64) sha256="$TERRAFORM_SHA256_AMD64" ;; \
@@ -48,20 +59,24 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Create a non-root user and group for security
-# Running containers as non-root is a best practice.
-RUN addgroup --system appgroup && adduser --system --ingroup appgroup appuser
+# Non-root user with a fixed UID/GID 1000, matching runAsUser/fsGroup in the
+# chart (H97). Without --uid/--gid, --system picks a random UID below 1000.
+RUN addgroup --system --gid 1000 appgroup \
+ && adduser --system --uid 1000 --ingroup appgroup appuser
 
-# Copy only the requirements file first to leverage Docker cache
+# Copy only the lock file first to leverage the Docker layer cache
 COPY requirements.txt .
 
-# Install dependencies
-# --no-cache-dir reduces image size
-# --system installs packages system-wide (good for simple containers)
-# Optionally use a virtual environment if preferred
-RUN pip install --no-cache-dir -r requirements.txt
+# Install the hash-pinned dependencies (generated from requirements.in with
+# pip-compile --generate-hashes). --require-hashes fails the build if any
+# downloaded file does not match the lock file.
+# Then remove pip itself: it is not used at runtime, and its vendored copies of
+# urllib3, msgpack and setuptools are what Trivy flags in the image.
+RUN pip install --no-cache-dir --require-hashes -r requirements.txt \
+ && pip uninstall -y pip
 
-# Copy the source code directory into the container's working directory
+# Copy the source code. It stays root-owned (read-only for the app user), so a
+# compromised process cannot rewrite it. The app writes only under /tmp.
 COPY injecto/ ./injecto/
 
 # Stamp the release version into the package. The publish workflow builds from
@@ -70,11 +85,8 @@ COPY injecto/ ./injecto/
 # would always report the previous version.
 RUN echo "__version__ = \"${INJECTO_VERSION}\"" > ./injecto/version.py
 
-# Change ownership of the app directory to the non-root user
-# This is important if the entrypoint needs to write files (though our script writes outside /app)
-RUN chown -R appuser:appgroup /app
-# Switch to the non-root user
-USER appuser
+# Switch to the non-root user (numeric, so the kubelet can verify runAsNonRoot)
+USER 1000:1000
 
 # Expose port for API mode
 EXPOSE 8000

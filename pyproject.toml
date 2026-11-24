@@ -22,9 +22,10 @@ packages = ["injecto"]
 
 [tool.setuptools.dynamic]
 version = { attr = "injecto.version.__version__" }
-# requirements.txt stays the single source of runtime dependencies: it is what
-# the Dockerfile installs, and duplicating the list here is how the two drift.
-dependencies = { file = ["requirements.txt"] }
+# requirements.in stays the single source of runtime dependencies (the
+# Dockerfile installs its hash-pinned lock, requirements.txt). Not the lock
+# itself: setuptools cannot parse its --hash lines.
+dependencies = { file = ["requirements.in"] }
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
